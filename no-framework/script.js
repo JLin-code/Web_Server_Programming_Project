@@ -9,34 +9,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Parallax effect for watch images
-    const handleParallax = () => {
-        const parallaxElements = document.querySelectorAll('.parallax');
-        parallaxElements.forEach(element => {
-            const scrolled = window.pageYOffset;
-            const rate = scrolled * -0.2;
-            element.style.transform = `translateY(${rate}px)`;
-        });
-    };
-
-    // Intersection Observer for fade-in animations
+    // Intersection Observer for product cards
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
-                entry.target.style.opacity = '1';
-                entry.target.style.transform = 'translateY(0)';
+                entry.target.classList.add('visible');
             }
         });
     }, {
         threshold: 0.1
     });
 
-    document.querySelectorAll('.watch-item, .feature').forEach(element => {
-        element.style.opacity = '0';
-        element.style.transform = 'translateY(20px)';
-        element.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-        observer.observe(element);
+    document.querySelectorAll('.product-card').forEach(card => {
+        observer.observe(card);
     });
-
-    window.addEventListener('scroll', handleParallax);
 });

@@ -3,96 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Luxury Timepieces</title>
+    <title>Timepiece Luxury Watches</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="logo">TIMEPIECE</div>
-        <div class="nav-links">
-            <a href="#collection">Collection</a>
-            <a href="#heritage">Heritage</a>
-            <a href="#craftmanship">Craftmanship</a>
-        </div>
+    <nav class="nav-container">
+        <div class="logo">Timepiece</div>
+        <ul class="nav-links">
+            <li><a href="#home">Home</a></li>
+            <li><a href="#collection">Collection</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
+        </ul>
     </nav>
 
-    <section class="hero">
-        <h1 class="fade-in">Exceptional Craftsmanship</h1>
-        <p class="fade-in-delayed">Discover our collection of premium timepieces</p>
-    </section>
-
-    <section class="watch-showcase" id="collection">
-        <div class="watch-item">
-            <img src="https://images.unsplash.com/photo-1523170335258-f5ed11844a49?q=80" alt="Luxury Watch 1" class="parallax">
-            <div class="text-overlay">
-                <h2>The Classic Collection</h2>
-                <p>Timeless elegance meets modern sophistication</p>
-                <p class="price">$12,500</p>
-                <a href="#" class="cta-button">Explore More</a>
-            </div>
-        </div>
-        <div class="watch-item">
-            <img src="https://images.unsplash.com/photo-1547996160-81dfa63595aa?q=80" alt="Luxury Watch 2" class="parallax">
-            <div class="text-overlay">
-                <h2>Sport Master Series</h2>
-                <p>Engineered for adventure, designed for style</p>
-                <p class="price">$18,900</p>
-                <a href="#" class="cta-button">Explore More</a>
-            </div>
+    <section id="hero">
+        <div class="hero-content">
+            <h1>Timeless Elegance</h1>
+            <p>Discover our collection of luxury timepieces</p>
+            <a href="#collection" class="cta-button">Explore Collection</a>
         </div>
     </section>
 
-    <section class="heritage" id="heritage">
-        <h2 class="section-title">Our Heritage</h2>
-        <div class="heritage-content">
-            <img src="https://images.unsplash.com/photo-1587836374828-4dbafa94cf0e?q=80" alt="Heritage Watch" class="heritage-image">
-            <div class="heritage-text">
-                <h2>Our Legacy of Excellence</h2>
-                <p>Founded in 1875 in the heart of Switzerland, our company has been crafting exceptional timepieces for over 145 years. Our commitment to excellence has been passed down through five generations of master watchmakers.</p>
-                <p>Each timepiece tells a story of innovation, precision, and unparalleled craftsmanship that has defined luxury watchmaking for nearly one and a half centuries.</p>
+    <section id="collection">
+        <h2>Featured Watches</h2>
+        <div class="product-grid">
+            <div class="product-card" data-aos="fade-up">
+                <img src="https://images.unsplash.com/photo-1523170335258-f5ed11844a49?ixlib=rb-4.0.3" alt="Watch 1">
+                <h3>Classic Edition</h3>
+                <p>$999</p>
+                <button>Learn More</button>
+            </div>
+            <div class="product-card" data-aos="fade-up">
+                <img src="https://images.unsplash.com/photo-1524592094714-0f0654e20314?ixlib=rb-4.0.3" alt="Watch 2">
+                <h3>Sport Series</h3>
+                <p>$1,299</p>
+                <button>Learn More</button>
+            </div>
+            <div class="product-card" data-aos="fade-up">
+                <img src="https://images.unsplash.com/photo-1522312346375-d1a52e2b99b3?ixlib=rb-4.0.3" alt="Watch 3">
+                <h3>Luxury Collection</h3>
+                <p>$2,499</p>
+                <button>Learn More</button>
             </div>
         </div>
     </section>
 
-    <section class="craftmanship" id="craftmanship">
-        <h2 class="section-title">The Art of Craftmanship</h2>
-        <div class="craft-grid">
-            <div class="craft-item">
-                <img src="https://images.unsplash.com/photo-1509048191080-d2984bad6ae5?q=80" alt="Watch Movement" class="craft-image">
-                <div class="craft-details">
-                    <h3>Precision Engineering</h3>
-                    <p>Each movement consists of over 300 hand-finished components, meticulously assembled by our master craftsmen. Every gear, spring, and bridge is carefully selected and finished to perfection.</p>
-                </div>
-            </div>
-            <div class="craft-item">
-                <img src="https://images.unsplash.com/photo-1478004521390-655bd10c9f43?q=80" alt="Watch Assembly" class="craft-image">
-                <div class="craft-details">
-                    <h3>Master Assembly</h3>
-                    <p>Every timepiece takes over 500 hours to complete, with each component being carefully inspected and assembled by hand to ensure perfect functionality and reliability.</p>
-                </div>
-            </div>
-            <div class="craft-item">
-                <img src="https://images.unsplash.com/photo-1612817159949-195b6eb9e31a?q=80" alt="Quality Control" class="craft-image">
-                <div class="craft-details">
-                    <h3>Quality Control</h3>
-                    <p>Rigorous testing ensures perfection in every detail. Each watch undergoes extensive quality control processes before being certified for release.</p>
+    <section id="about">
+        <h2>About Us</h2>
+        <div class="about-content">
+            <div class="about-images">
+                <div class="image-grid">
+                    <div class="grid-item">
+                        <img src="https://images.unsplash.com/photo-1585123334904-845d60e97b29?ixlib=rb-4.0.3" alt="Watchmaking Process" loading="lazy">
+                        <h3>Master Craftsmanship</h3>
+                        <p>Our master craftsmen bring decades of experience to every timepiece, ensuring unparalleled quality and precision in every watch we create.</p>
+                    </div>
+                    <div class="grid-item">
+                        <img src="https://images.unsplash.com/photo-1614164185128-e4ec99c436d7?ixlib=rb-4.0.3" alt="Watch Workshop" loading="lazy">
+                        <h3>Our Workshop</h3>
+                        <p>In our state-of-the-art workshop, tradition meets innovation as we combine time-honored techniques with modern technology.</p>
+                    </div>
+                    <div class="grid-item">
+                        <img src="https://images.unsplash.com/photo-1583312708610-fe16a34b0826?ixlib=rb-4.0.3" alt="Quality Testing" loading="lazy">
+                        <h3>Quality Assurance</h3>
+                        <p>Each timepiece undergoes rigorous testing and inspection to ensure it meets our exacting standards of excellence and reliability.</p>
+                    </div>
+                    <div class="grid-item">
+                        <img src="https://images.unsplash.com/photo-1623998021450-85c29c644e0d?ixlib=rb-4.0.3" alt="Watch Design" loading="lazy">
+                        <h3>Design Excellence</h3>
+                        <p>Our designs blend timeless elegance with contemporary aesthetics, creating watches that are both sophisticated and modern.</p>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="features">
-        <div class="feature">
-            <h3>Swiss Made</h3>
-            <p>Precision engineering at its finest</p>
-        </div>
-        <div class="feature">
-            <h3>Limited Edition</h3>
-            <p>Exclusive timepieces for the discerning collector</p>
-        </div>
-        <div class="feature">
-            <h3>Lifetime Warranty</h3>
-            <p>Quality guaranteed for generations</p>
+    <section id="contact">
+        <h2>Contact Us</h2>
+        <div class="contact-content">
+            <div class="contact-info">
+                <h3>Get In Touch</h3>
+                <p>We're here to assist you with any questions about our luxury watches.</p>
+                <div class="contact-details">
+                    <p>📍 123 Luxury Lane, New York, NY 10001</p>
+                    <p>📞 (555) 123-4567</p>
+                    <p>✉️ info@timepiece.com</p>
+                </div>
+            </div>
+            <form class="contact-form">
+                <div class="form-group">
+                    <input type="text" placeholder="Your Name" required>
+                </div>
+                <div class="form-group">
+                    <input type="email" placeholder="Your Email" required>
+                </div>
+                <div class="form-group">
+                    <input type="text" placeholder="Subject">
+                </div>
+                <div class="form-group">
+                    <textarea placeholder="Your Message" rows="6" required></textarea>
+                </div>
+                <button type="submit" class="submit-btn">Send Message</button>
+            </form>
         </div>
     </section>
 

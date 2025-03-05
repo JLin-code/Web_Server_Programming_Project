@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-var bestClass = 'Web Programming'
+var bestClass = ''
 </script>
 
 <template>

@@ -184,7 +184,7 @@ function logout() {
                                     <a class="navbar-item" @click.stop="login('Jack Lin')">Jack Lin</a>
                                     <a class="navbar-item" @click.stop="login('John Doe')">John Doe</a>
                                     <hr class="navbar-divider">
-                                    <RouterLink to="/password-reset" class="navbar-item">Forgot Password?</RouterLink>
+                                    <RouterLink to="/password-reset" class="navbar-item">Other Account</RouterLink>
                                 </div>
                             </div>
                         </div>
@@ -278,7 +278,7 @@ function logout() {
     position: absolute;
     right: 0;
     top: 100%;
-    background-color: white;
+    background-color: rgb(3, 255, 150);
     border-radius: 4px;
     box-shadow: 0 8px 8px rgba(10, 10, 10, 0.1);
     padding-bottom: 0.5rem;
@@ -304,10 +304,10 @@ function logout() {
 }
 
 .navbar-divider {
-    background-color: #ededed;
+    background-color: black;
     border: none;
     height: 1px;
-    margin: 0.5rem 0;
+    margin: 0.225rem 0;
 }
 
 /* Mobile adjustments for login dropdown */

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 
-var bestClass = 'Web Server Programming'
+var page = 'Home'
 </script>
 
 <template>
   <main>
-    <h1 class="title">Welcome to {{ bestClass }}</h1>
+    <h1 class="title">Welcome to {{ page }}</h1>
   </main>
 </template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-var page = 'My Activity'
+var page = 'People Search'
 </script>
 
 <template>

@@ -4,8 +4,13 @@ import { ref } from 'vue'
 const isActive = ref(false)
 const isLoginDropdownActive = ref(false)
 const isAdminDropdownActive = ref(false)
+const isLoggedIn = ref(false)
+const currentUser = ref({
+    name: '',
+    isAdmin: false
+})
 
-// New function to toggle dropdown states
+// Toggles dropdown while ensuring only one is open at a time
 function toggleDropdown(dropdown: string) {
   if (dropdown === 'login') {
     isLoginDropdownActive.value = !isLoginDropdownActive.value;
@@ -16,10 +21,30 @@ function toggleDropdown(dropdown: string) {
   }
 }
 
-// Close dropdowns when clicking outside
 function closeDropdowns() {
   isLoginDropdownActive.value = false;
   isAdminDropdownActive.value = false;
+}
+
+// Closes dropdowns when opening burger menu to prevent UI conflicts
+function toggleBurger() {
+  isActive.value = !isActive.value;
+  if (isActive.value) {
+    closeDropdowns();
+  }
+}
+
+function login(username: string, admin: boolean = false) {
+  currentUser.value.name = username
+  currentUser.value.isAdmin = admin
+  isLoggedIn.value = true
+  isLoginDropdownActive.value = false
+}
+
+function logout() {
+  isLoggedIn.value = false
+  currentUser.value.name = ''
+  currentUser.value.isAdmin = false
 }
 </script>
 
@@ -31,8 +56,36 @@ function closeDropdowns() {
                     <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="30" />
                 </a>
 
+                <!-- Always visible on desktop -->
+                <RouterLink to="/" class="navbar-item is-hidden-mobile">
+                    <span class="icon-text">
+                        <span class="icon">
+                            <i class="fas fa-running"></i>
+                        </span>
+                        <span>My Activity</span>
+                    </span>
+                </RouterLink>
+                
+                <RouterLink to="/statistics" class="navbar-item is-hidden-mobile">
+                    <span class="icon-text">
+                        <span class="icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </span>
+                        <span>Statistics</span>
+                    </span>
+                </RouterLink>
+                
+                <RouterLink to="/friends" class="navbar-item is-hidden-mobile">
+                    <span class="icon-text">
+                        <span class="icon">
+                            <i class="fas fa-users"></i>
+                        </span>
+                        <span>Friends Activity</span>
+                    </span>
+                </RouterLink>
+
                 <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false"
-                   :class="{ 'is-active': isActive }" @click="isActive = !isActive">
+                   :class="{ 'is-active': isActive }" @click.stop="toggleBurger">
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
                     <span aria-hidden="true"></span>
@@ -42,7 +95,8 @@ function closeDropdowns() {
 
             <div class="navbar-menu" :class="{ 'is-active': isActive }">
                 <div class="navbar-start">
-                    <RouterLink to="/" class="navbar-item">
+                    <!-- Mobile-only duplicates -->
+                    <RouterLink to="/" class="navbar-item is-hidden-tablet">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-running"></i>
@@ -51,7 +105,7 @@ function closeDropdowns() {
                         </span>
                     </RouterLink>
                     
-                    <RouterLink to="/statistics" class="navbar-item">
+                    <RouterLink to="/statistics" class="navbar-item is-hidden-tablet">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-chart-bar"></i>
@@ -60,7 +114,7 @@ function closeDropdowns() {
                         </span>
                     </RouterLink>
                     
-                    <RouterLink to="/friends" class="navbar-item">
+                    <RouterLink to="/friends" class="navbar-item is-hidden-tablet">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-users"></i>
@@ -69,6 +123,7 @@ function closeDropdowns() {
                         </span>
                     </RouterLink>
                     
+                    <!-- Items in burger on mobile -->
                     <RouterLink to="/search" class="navbar-item">
                         <span class="icon-text">
                             <span class="icon">
@@ -78,9 +133,9 @@ function closeDropdowns() {
                         </span>
                     </RouterLink>
 
-                    <div class="navbar-item has-dropdown" 
+                    <div class="navbar-item has-dropdown" v-if="isLoggedIn && currentUser.isAdmin"
                          :class="{ 'is-active': isAdminDropdownActive }">
-                        <a class="navbar-link" @click.prevent="toggleDropdown('admin')">
+                        <a class="navbar-link" @click.stop="toggleDropdown('admin')">
                                 <span>Admin</span>
                         </a>
 
@@ -95,25 +150,39 @@ function closeDropdowns() {
                 <div class="navbar-end">
                     <div class="navbar-item">
                         <div class="buttons">
-                            <RouterLink to="/signup" class="button is-primary">
+                            <RouterLink v-if="!isLoggedIn" to="/signup" class="button is-primary">
                                 <span>Sign up</span>
                                 <span class="icon">
                                     <i class="fas fa-user-plus"></i>
                                 </span>
                             </RouterLink>
                             
-                            <div class="navbar-item has-dropdown"
-                                 :class="{ 'is-active': isLoginDropdownActive }">
-                                <a class="button is-light" @click.prevent="toggleDropdown('login')">
+                            <RouterLink v-if="isLoggedIn" to="/profile" class="button is-primary">
+                                <span>Profile ({{ currentUser.name }})</span>
+                                <span class="icon">
+                                    <i class="fas fa-user"></i>
+                                </span>
+                            </RouterLink>
+                            
+                            <a v-if="isLoggedIn" @click="logout" class="button is-light">
+                                <span>Logout</span>
+                                <span class="icon">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                </span>
+                            </a>
+                            
+                            <!-- Custom implementation for proper dropdown behavior -->
+                            <div v-if="!isLoggedIn" class="login-dropdown-container">
+                                <a class="button is-light" @click.stop="toggleDropdown('login')">
                                     <span>Log in</span>
                                     <span class="icon">
                                         <i class="fas fa-sign-in-alt"></i>
                                     </span>
                                 </a>
-                                <div class="navbar-dropdown is-right">
-                                    <RouterLink to="/login" class="navbar-item">ADMIN</RouterLink>
-                                    <RouterLink to="/login/" class="navbar-item">Jack Lin</RouterLink>
-                                    <RouterLink to="/login/" class="navbar-item">John Doe</RouterLink>
+                                <div class="navbar-dropdown is-right" :class="{ 'is-active': isLoginDropdownActive }">
+                                    <a class="navbar-item" @click.stop="login('ADMIN', true)">ADMIN</a>
+                                    <a class="navbar-item" @click.stop="login('Jack Lin')">Jack Lin</a>
+                                    <a class="navbar-item" @click.stop="login('John Doe')">John Doe</a>
                                     <hr class="navbar-divider">
                                     <RouterLink to="/password-reset" class="navbar-item">Forgot Password?</RouterLink>
                                 </div>
@@ -136,7 +205,6 @@ function closeDropdowns() {
     border-top-right-radius: 0;
 }
 
-/* New styles for button with icon */
 .button {
     display: flex;
     align-items: center;
@@ -147,7 +215,6 @@ function closeDropdowns() {
     margin-left: 0.5em;
 }
 
-/* Remove is-hoverable class styles as we're using click now */
 .navbar-item.has-dropdown .navbar-link {
     cursor: pointer;
 }
@@ -156,12 +223,10 @@ function closeDropdowns() {
     margin-left: 0.5em;
 }
 
-/* Add styles for icon spacing in navbar items */
 .navbar-item .icon {
     margin-right: 0.3em;
 }
 
-/* Fix icon alignment in admin dropdown */
 .navbar-link {
     display: flex;
     align-items: center;
@@ -175,5 +240,155 @@ function closeDropdowns() {
 
 .icon-text .icon {
     margin-right: 0.4em;
+}
+
+.navbar-brand {
+    align-items: center;
+}
+
+@media screen and (min-width: 1024px) {
+    .navbar-brand .navbar-item {
+        padding-right: 0.75rem;
+    }
+}
+
+@media screen and (max-width: 1023px) {
+    .navbar-dropdown {
+        display: block;
+        padding: 0;
+        box-shadow: none;
+        border-left: 1px solid rgba(255, 255, 255, 0.2);
+        margin-left: 1rem;
+    }
+    
+    .navbar-item.has-dropdown.is-active .navbar-dropdown {
+        position: static;
+        background-color: transparent;
+    }
+}
+
+/* Custom login dropdown implementation */
+.login-dropdown-container {
+    position: relative;
+    display: inline-flex;
+}
+
+.login-dropdown-container .navbar-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background-color: white;
+    border-radius: 4px;
+    box-shadow: 0 8px 8px rgba(10, 10, 10, 0.1);
+    padding-bottom: 0.5rem;
+    padding-top: 0.5rem;
+    min-width: 12rem;
+    z-index: 20;
+}
+
+.login-dropdown-container .navbar-dropdown.is-active {
+    display: block;
+}
+
+.login-dropdown-container .navbar-item {
+    color: #4a4a4a;
+    display: block;
+    line-height: 1.5;
+    padding: 0.375rem 1rem;
+    position: relative;
+}
+
+.login-dropdown-container .navbar-item:hover {
+    background-color: #f5f5f5;
+}
+
+.navbar-divider {
+    background-color: #ededed;
+    border: none;
+    height: 1px;
+    margin: 0.5rem 0;
+}
+
+/* Mobile adjustments for login dropdown */
+@media screen and (max-width: 1023px) {
+    .login-dropdown-container {
+        display: block;
+        width: auto;
+        margin-bottom: 0;
+    }
+    
+    .login-dropdown-container .button {
+        width: auto;
+        justify-content: space-between;
+        margin-bottom: 0;
+        display: inline-flex;
+    }
+    
+    .navbar-item .buttons {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        align-items: flex-start;
+    }
+    
+    .navbar-item .buttons .button {
+        margin-bottom: 0.5rem;
+        margin-right: 0.5rem;
+    }
+    
+    .login-dropdown-container .navbar-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        box-shadow: 0 8px 8px rgba(10, 10, 10, 0.1);
+        background-color: white;
+        border-left: none;
+        margin-left: 0;
+        padding: 0.5rem 0;
+        width: 12rem;
+        z-index: 30;
+    }
+    
+    .login-dropdown-container .navbar-dropdown:not(.is-active) {
+        display: none;
+    }
+    
+    .login-dropdown-container .navbar-item {
+        color: #4a4a4a;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .login-dropdown-container .navbar-item:hover {
+        background-color: #f5f5f5;
+    }
+    
+    .login-dropdown-container .navbar-divider {
+        background-color: #ededed;
+    }
+}
+
+/* Phone-specific adjustments */
+@media screen and (max-width: 768px) {
+    .login-dropdown-container .navbar-dropdown {
+        width: 100%;
+        position: static;
+        box-shadow: none;
+        background-color: transparent;
+        border-left: 1px solid rgba(255, 255, 255, 0.2);
+        margin-left: 1rem;
+        padding: 0;
+    }
+    
+    .login-dropdown-container .navbar-item {
+        color: white;
+    }
+    
+    .login-dropdown-container .navbar-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .login-dropdown-container .navbar-divider {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
 }
 </style>

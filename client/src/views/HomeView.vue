@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { userStore } from '@/stores/userStore';
 
 // Define type for time periods
 type TimePeriod = 'day' | 'week' | 'month' | 'allTime';
@@ -7,32 +8,14 @@ type TimePeriod = 'day' | 'week' | 'month' | 'allTime';
 // Page title
 const page = ref('Fitness Tracker');
 
-// Mock data for different time periods
-const trackingData = ref({
-  day: {
-    distance: 5.2,
-    duration: 32,
-    avgPace: 6.9,
-    calories: 320
-  },
-  week: {
-    distance: 28.5,
-    duration: 185,
-    avgPace: 6.5,
-    calories: 1850
-  },
-  month: {
-    distance: 112.4,
-    duration: 720,
-    avgPace: 6.4,
-    calories: 7200
-  },
-  allTime: {
-    distance: 1035.7,
-    duration: 6248,
-    avgPace: 6.0,
-    calories: 62480
-  }
+// Get user-specific data from store
+const trackingData = computed(() => {
+  return userStore.getUserData();
+});
+
+// Get current username for personalized display
+const username = computed(() => {
+  return userStore.currentUser() || 'Guest';
 });
 
 // Active tab state with proper typing
@@ -46,7 +29,7 @@ function setActiveTab(tab: TimePeriod) {
 
 <template>
   <main>
-    <h1 class="title">{{ page }}</h1>
+    <h1 class="title">{{ username }}'s {{ page }}</h1>
     
     <!-- Period selector tabs -->
     <div class="period-tabs">

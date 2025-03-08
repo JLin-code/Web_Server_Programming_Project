@@ -32,16 +32,16 @@ const userData: UserDataStore = {
     allTime: { distance: 745.2, duration: 5930, avgPace: 8.0, calories: 41500 }
   },
   'Major Major': {
-    day: { distance: 3.1, duration: 25, avgPace: 8.1, calories: 210 },
-    week: { distance: 18.6, duration: 145, avgPace: 7.8, calories: 1250 },
-    month: { distance: 75.3, duration: 580, avgPace: 7.7, calories: 4900 },
-    allTime: { distance: 745.2, duration: 5930, avgPace: 8.0, calories: 41500 }
+    day: { distance: 6.8, duration: 35, avgPace: 5.1, calories: 390 },
+    week: { distance: 32.7, duration: 198, avgPace: 6.1, calories: 2340 },
+    month: { distance: 142.5, duration: 845, avgPace: 5.9, calories: 9800 },
+    allTime: { distance: 1876.3, duration: 9250, avgPace: 4.9, calories: 112650 }
   },
   'Laura Green': {
-    day: { distance: 3.1, duration: 25, avgPace: 8.1, calories: 210 },
-    week: { distance: 18.6, duration: 145, avgPace: 7.8, calories: 1250 },
-    month: { distance: 75.3, duration: 580, avgPace: 7.7, calories: 4900 },
-    allTime: { distance: 745.2, duration: 5930, avgPace: 8.0, calories: 41500 }
+    day: { distance: 4.3, duration: 38, avgPace: 8.8, calories: 275 },
+    week: { distance: 24.9, duration: 215, avgPace: 8.6, calories: 1850 },
+    month: { distance: 98.7, duration: 715, avgPace: 7.2, calories: 6240 },
+    allTime: { distance: 923.5, duration: 7340, avgPace: 7.9, calories: 58720 }
   },
   'default': {
     day: { distance: 0, duration: 0, avgPace: 0, calories: 0 },

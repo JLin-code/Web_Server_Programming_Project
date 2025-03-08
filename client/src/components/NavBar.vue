@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { userStore } from '@/stores/userStore'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const isActive = ref(false)
 const isLoginDropdownActive = ref(false)
 const isAdminDropdownActive = ref(false)
 const isLoggedIn = ref(false)
+const attemptedRoute = ref('')
 const currentUser = ref({
     name: '',
     isAdmin: false
@@ -44,6 +47,16 @@ function toggleBurger() {
   }
 }
 
+// Function to check login status before navigation
+function checkLoginBeforeNav(route: string) {
+  if (!isLoggedIn.value) {
+    attemptedRoute.value = route
+    isLoginDropdownActive.value = true
+    return false
+  }
+  return true
+}
+
 function login(username: string, admin: boolean = false) {
   currentUser.value.name = username
   currentUser.value.isAdmin = admin
@@ -52,6 +65,12 @@ function login(username: string, admin: boolean = false) {
   
   // Update the user store
   userStore.login(username)
+  
+  // If there was an attempted route, navigate there
+  if (attemptedRoute.value) {
+    router.push(attemptedRoute.value)
+    attemptedRoute.value = ''
+  }
 }
 
 function logout() {
@@ -73,32 +92,32 @@ function logout() {
                 </a>
 
                 <!-- Always visible on desktop -->
-                <RouterLink to="/" class="navbar-item is-hidden-mobile">
+                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/') && router.push('/')">
                     <span class="icon-text">
                         <span class="icon">
                             <i class="fas fa-running"></i>
                         </span>
                         <span>My Activity</span>
                     </span>
-                </RouterLink>
+                </a>
                 
-                <RouterLink to="/statistics" class="navbar-item is-hidden-mobile">
+                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/statistics') && router.push('/statistics')">
                     <span class="icon-text">
                         <span class="icon">
                             <i class="fas fa-chart-bar"></i>
                         </span>
                         <span>Statistics</span>
                     </span>
-                </RouterLink>
+                </a>
                 
-                <RouterLink to="/friends" class="navbar-item is-hidden-mobile">
+                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/friends') && router.push('/friends')">
                     <span class="icon-text">
                         <span class="icon">
                             <i class="fas fa-users"></i>
                         </span>
                         <span>Friends Activity</span>
                     </span>
-                </RouterLink>
+                </a>
 
                 <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false"
                    :class="{ 'is-active': isActive }" @click.stop="toggleBurger">
@@ -112,42 +131,42 @@ function logout() {
             <div class="navbar-menu" :class="{ 'is-active': isActive }">
                 <div class="navbar-start">
                     <!-- Mobile-only duplicates -->
-                    <RouterLink to="/" class="navbar-item is-hidden-tablet">
+                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/') && router.push('/')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-running"></i>
                             </span>
                             <span>My Activity</span>
                         </span>
-                    </RouterLink>
+                    </a>
                     
-                    <RouterLink to="/statistics" class="navbar-item is-hidden-tablet">
+                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/statistics') && router.push('/statistics')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-chart-bar"></i>
                             </span>
                             <span>Statistics</span>
                         </span>
-                    </RouterLink>
+                    </a>
                     
-                    <RouterLink to="/friends" class="navbar-item is-hidden-tablet">
+                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/friends') && router.push('/friends')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-users"></i>
                             </span>
                             <span>Friends Activity</span>
                         </span>
-                    </RouterLink>
+                    </a>
                     
                     <!-- Items in burger on mobile -->
-                    <RouterLink to="/search" class="navbar-item">
+                    <a class="navbar-item" @click="checkLoginBeforeNav('/search') && router.push('/search')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-search"></i>
                             </span>
                             <span>People Search</span>
                         </span>
-                    </RouterLink>
+                    </a>
 
                     <div class="navbar-item has-dropdown" v-if="isLoggedIn && currentUser.isAdmin"
                          :class="{ 'is-active': isAdminDropdownActive }">
@@ -190,13 +209,13 @@ function logout() {
                             <!-- Custom implementation for proper dropdown behavior -->
                             <div v-if="!isLoggedIn" class="login-dropdown-container">
                                 <a class="button is-light" @click.stop="toggleDropdown('login')">
-                                    <span>Log in</span>
+                                    <span>Log in {{ attemptedRoute ? '(to access ' + attemptedRoute + ')' : '' }}</span>
                                     <span class="icon">
                                         <i class="fas fa-sign-in-alt"></i>
                                     </span>
                                 </a>
                                 <div class="navbar-dropdown is-right" :class="{ 'is-active': isLoginDropdownActive }">
-                                    <a class="navbar-item" @click.stop="login('ADMIN', true)">ADMIN</a>
+                                    <a class="navbar-item" @click.stop="login('Admin', true)">Administrator</a>
                                     <a class="navbar-item" @click.stop="login('Jane Smith')">Jane Smith</a>
                                     <a class="navbar-item" @click.stop="login('John Doe')">John Doe</a>
                                     <a class="navbar-item" @click.stop="login('Major Major')">Major Major</a>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { userStore } from '@/stores/userStore'
 
 const isActive = ref(false)
 const isLoginDropdownActive = ref(false)
@@ -8,6 +9,15 @@ const isLoggedIn = ref(false)
 const currentUser = ref({
     name: '',
     isAdmin: false
+})
+
+// Sync state with the store on mount
+onMounted(() => {
+  isLoggedIn.value = userStore.isLoggedIn();
+  if (isLoggedIn.value) {
+    currentUser.value.name = userStore.currentUser();
+    currentUser.value.isAdmin = currentUser.value.name === 'ADMIN';
+  }
 })
 
 // Toggles dropdown while ensuring only one is open at a time
@@ -39,12 +49,18 @@ function login(username: string, admin: boolean = false) {
   currentUser.value.isAdmin = admin
   isLoggedIn.value = true
   isLoginDropdownActive.value = false
+  
+  // Update the user store
+  userStore.login(username)
 }
 
 function logout() {
   isLoggedIn.value = false
   currentUser.value.name = ''
   currentUser.value.isAdmin = false
+  
+  // Update the user store
+  userStore.logout()
 }
 </script>
 

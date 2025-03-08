@@ -201,8 +201,6 @@ function logout() {
                                     <a class="navbar-item" @click.stop="login('John Doe')">John Doe</a>
                                     <a class="navbar-item" @click.stop="login('Major Major')">Major Major</a>
                                     <a class="navbar-item" @click.stop="login('Laura Green')">Laura Green</a>
-                                    <hr class="navbar-divider">
-                                    <RouterLink to="/password-reset" class="navbar-item">Other Account</RouterLink>
                                 </div>
                             </div>
                         </div>

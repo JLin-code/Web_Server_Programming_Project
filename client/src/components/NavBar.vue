@@ -181,10 +181,10 @@ function logout() {
                                 </a>
                                 <div class="navbar-dropdown is-right" :class="{ 'is-active': isLoginDropdownActive }">
                                     <a class="navbar-item" @click.stop="login('ADMIN', true)">ADMIN</a>
-                                    <a class="navbar-item" @click.stop="login('Jack Lin')">Jane Smith</a>
+                                    <a class="navbar-item" @click.stop="login('Jane Smith')">Jane Smith</a>
                                     <a class="navbar-item" @click.stop="login('John Doe')">John Doe</a>
-                                    <a class="navbar-item" @click.stop="login('Jack Lin')">Major Major</a>
-                                    <a class="navbar-item" @click.stop="login('John Doe')">Laura Green</a>
+                                    <a class="navbar-item" @click.stop="login('Major Major')">Major Major</a>
+                                    <a class="navbar-item" @click.stop="login('Laura Green')">Laura Green</a>
                                     <hr class="navbar-divider">
                                     <RouterLink to="/password-reset" class="navbar-item">Other Account</RouterLink>
                                 </div>

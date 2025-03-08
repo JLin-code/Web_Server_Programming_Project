@@ -156,7 +156,7 @@ function logout() {
                         </a>
 
                         <div class="navbar-dropdown">
-                            <RouterLink to="/admin/users" class="navbar-item">
+                            <RouterLink to="/manage-users" class="navbar-item">
                                     <span>Manage Users</span>
                             </RouterLink>
                         </div>

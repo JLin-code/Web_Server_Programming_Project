@@ -79,7 +79,7 @@ function deleteUser(user: any) {
             <td>{{ user.email }}</td>
             <td>{{ user.handle }}</td>
             <td>
-              <span class="tag" :class="user.isAdmin ? 'is-success' : 'is-light'">
+              <span class="tag" :class="user.isAdmin ? 'is-success' : 'is-warning'">
                 {{ user.isAdmin ? 'Yes' : 'No' }}
               </span>
             </td>
@@ -124,12 +124,32 @@ function deleteUser(user: any) {
 
 .table {
   width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table th, .table td {
+  border-right: 1px solid #dbdbdb;
+  padding: 0.75em 1em;
+}
+
+.table th:last-child, .table td:last-child {
+  border-right: none;
 }
 
 .table th {
   background-color: #3273dc;
   color: white;
   font-weight: bold;
+  border-bottom: 2px solid #1c60c7;
+}
+
+.table tr {
+  border-bottom: 1px solid #dbdbdb;
+}
+
+.table tr:last-child {
+  border-bottom: none;
 }
 
 .buttons {
@@ -151,6 +171,18 @@ function deleteUser(user: any) {
   width: 45px;
   display: inline-flex;
   justify-content: center;
+}
+
+.tag.is-warning {
+  background-color: #ffdd57;
+  color: rgba(0, 0, 0, 0.7);
+  border: 1px solid #ffcc00;
+}
+
+.tag.is-success {
+  background-color: #48c774;
+  color: #fff;
+  border: 1px solid #3ab364;
 }
 
 @media screen and (max-width: 768px) {

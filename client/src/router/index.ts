@@ -1,5 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
+import PeopleSearchView from '../views/PeopleSearchView.vue'
+import MyActivityView from '../views/MyActivityView.vue'
+import ManageUsersView from '../views/ManageUsersView.vue'
+import SignUpView from '../views/SignUpView.vue'
+import StatisticsView from '../views/StatisticsView.vue'
+import FriendsActivityView from '../views/FriendsActivityView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -10,13 +16,40 @@ const router = createRouter({
       component: HomeView,
     },
     {
-      path: '/about',
-      name: 'about',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue'),
+      path: '/friend-activity',
+      name: 'friendActivity',
+      component: FriendsActivityView,
     },
+    {
+      path: '/friends-activity',
+      name: 'friendsActivity',
+      component: FriendsActivityView,
+    },
+    {
+      path: '/my-activity',
+      name: 'myActivity',
+      component: MyActivityView,
+    },
+    {
+      path: '/people-search',
+      name: 'peopleSearch',
+      component: PeopleSearchView,
+    },
+    {
+      path: '/manage-users',
+      name: 'manageUsers',
+      component: ManageUsersView,
+    },
+    {
+      path: '/signup',
+      name: 'signup',
+      component: SignUpView,
+    },
+    {
+      path: '/statistics',
+      name: 'statistics',
+      component: StatisticsView,
+    }
   ],
 })
 

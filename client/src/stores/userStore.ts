@@ -13,7 +13,7 @@ type UserDataStore = Record<string, UserTrackingData>;
 
 // Mock data for different users
 const userData: UserDataStore = {
-  'ADMIN': {
+  'Admin': {
     day: { distance: 8.5, duration: 45, avgPace: 5.3, calories: 520 },
     week: { distance: 42.3, duration: 230, avgPace: 5.4, calories: 2600 },
     month: { distance: 180.6, duration: 950, avgPace: 5.3, calories: 11000 },

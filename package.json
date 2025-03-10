@@ -6,7 +6,8 @@
   
     "scripts": {
       "start": "node server/index.js",
-      "dev": "nodemon server/index.js --watch server"
+      "dev": "nodemon server/index.js --watch server",
+      "build": "chmod +x ./fix-rollup.sh && ./fix-rollup.sh"
     },
     "license": "ISC",
     "dependencies": {

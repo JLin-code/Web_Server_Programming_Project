@@ -227,18 +227,22 @@ const likeActivity = (id: number) => {
 
 .activity-metrics {
   display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 1.5rem;
   margin-top: 1rem;
   flex-wrap: wrap;
   background-color: rgba(0, 0, 0, 0.2);
   padding: 1rem;
   border-radius: 6px;
+  text-align: center;
 }
 
 .metric {
   display: flex;
   flex-direction: column;
   align-items: center;
+  margin: 0 0.5rem;
 }
 
 .metric-value {

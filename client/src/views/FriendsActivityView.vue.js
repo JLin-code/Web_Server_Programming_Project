@@ -47,8 +47,8 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-var vue_1 = require("vue");
-var activityStore_1 = require("../stores/activityStore");
+import vue_1 from "vue";
+import activityStore_1 from "../stores/activityStore";
 var page = 'Friends Activity';
 (0, vue_1.onMounted)(function () { return __awaiter(void 0, void 0, void 0, function () {
     return __generator(this, function (_a) {

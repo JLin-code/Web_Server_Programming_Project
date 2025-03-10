@@ -47,9 +47,9 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
     }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-import vue_1  from "vue";
-import userStore_1  from "../stores/userStore";
-import activityStore_1  from "../stores/activityStore";
+var vue_1 = require("vue");
+var userStore_1 = require("../stores/userStore");
+var activityStore_1 = require("../stores/activityStore");
 var page = 'My Activity';
 // Computed property to filter activities based on current user's name
 var filteredActivities = (0, vue_1.computed)(function () {

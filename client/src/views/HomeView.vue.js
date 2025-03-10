@@ -11,8 +11,8 @@ var __assign = (this && this.__assign) || function () {
     return __assign.apply(this, arguments);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-import vue_1 from "vue";
-import userStore_1 from "../stores/userStore";
+var vue_1 = require("vue");
+var userStore_1 = require("../stores/userStore");
 // Page title
 var page = (0, vue_1.ref)('Fitness Tracker');
 // Get user-specific data from store

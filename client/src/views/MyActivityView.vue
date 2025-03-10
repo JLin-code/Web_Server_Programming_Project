@@ -1,195 +1,71 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { userStore } from '@/stores/userStore';
 
 const page = 'My Activity';
 const activities = ref<any[]>([]);
 const loading = ref(true);
 const error = ref('');
 
-// User account info (this would come from authentication in a real app)
-const user = {
-  name: 'John Doe',
-  preferences: ['running', 'weightlifting', 'yoga'],
-  level: 'intermediate'
-};
-
-// Helper functions for generating random activities
-const getRandomElement = <T>(array: T[]): T => {
-  return array[Math.floor(Math.random() * array.length)];
-};
-
-const generateRandomDate = (daysBack = 30): string => {
-  const date = new Date();
-  date.setDate(date.getDate() - Math.floor(Math.random() * daysBack));
-  date.setHours(Math.floor(Math.random() * 24));
-  date.setMinutes(Math.floor(Math.random() * 60));
-  return date.toISOString();
-};
-
-const generateWorkout = (id: number): any => {
-  const workoutTypes = ['Running', 'Weightlifting', 'Yoga', 'Swimming', 'Cycling', 'HIIT'];
-  const type = getRandomElement(user.preferences) || getRandomElement(workoutTypes);
-  
-  const metrics: Record<string, string | number> = {};
-  
-  if (type === 'Running' || type === 'Cycling') {
-    const distance = Math.floor(Math.random() * 10) + 2;
-    const minutes = Math.floor(Math.random() * 40) + 15;
-    const calories = Math.floor(minutes * 8 + distance * 20);
-    
-    metrics.distance = `${distance}km`;
-    metrics.time = `${minutes}min`;
-    metrics.calories = calories.toString();
-    
-    return {
-      id,
-      type: 'workout',
-      title: `${type} Session`,
-      description: `Completed ${distance}km in ${minutes} minutes`,
-      date: generateRandomDate(),
-      metrics
-    };
-  } else if (type === 'Weightlifting') {
-    const weight = Math.floor(Math.random() * 50) + 40;
-    const sets = Math.floor(Math.random() * 5) + 3;
-    const reps = Math.floor(Math.random() * 8) + 5;
-    
-    metrics.weight = `${weight}kg`;
-    metrics.sets = sets;
-    metrics.reps = reps;
-    
-    return {
-      id,
-      type: 'workout',
-      title: 'Weight Training',
-      description: `Completed ${sets} sets of ${reps} reps`,
-      date: generateRandomDate(),
-      metrics
-    };
-  } else {
-    const minutes = Math.floor(Math.random() * 40) + 20;
-    metrics.duration = `${minutes}min`;
-    metrics.intensity = getRandomElement(['Low', 'Medium', 'High']);
-    
-    return {
-      id,
-      type: 'workout',
-      title: `${type} Session`,
-      description: `${minutes} minute ${type.toLowerCase()} workout`,
-      date: generateRandomDate(),
-      metrics
-    };
-  }
-};
-
-const generateAchievement = (id: number): any => {
-  const achievements = [
-    'New Personal Best',
-    'Streak Milestone',
-    'Distance Record',
-    'Weight Record',
-    'Consistency Award'
-  ];
-  
-  const title = getRandomElement(achievements);
-  
-  const descriptions = {
-    'New Personal Best': `Beat your previous record for ${getRandomElement(user.preferences)}`,
-    'Streak Milestone': `Completed ${Math.floor(Math.random() * 10) + 5} workouts in a row`,
-    'Distance Record': `Set a new distance record of ${Math.floor(Math.random() * 15) + 5}km`,
-    'Weight Record': `New weight record: ${Math.floor(Math.random() * 50) + 50}kg`,
-    'Consistency Award': `Worked out ${Math.floor(Math.random() * 4) + 3} times this week`
-  };
-  
-  const metrics: Record<string, string | number> = {};
-  if (title === 'New Personal Best') {
-    metrics.improvement = `${Math.floor(Math.random() * 20) + 5}%`;
-  } else if (title === 'Streak Milestone') {
-    metrics.days = Math.floor(Math.random() * 10) + 5;
-  } else if (title === 'Distance Record') {
-    metrics.distance = `${Math.floor(Math.random() * 15) + 5}km`;
-  } else if (title === 'Weight Record') {
-    metrics.weight = `${Math.floor(Math.random() * 50) + 50}kg`;
-  } else {
-    metrics.workouts = Math.floor(Math.random() * 4) + 3;
-  }
-  
-  return {
-    id,
-    type: 'achievement',
-    title,
-    description: descriptions[title as keyof typeof descriptions],
-    date: generateRandomDate(14),
-    metrics
-  };
-};
-
-const generateGoal = (id: number): any => {
-  const goalTypes = [
-    'Weekly Goal Completed',
-    'Monthly Challenge Progress',
-    'Personal Target'
-  ];
-  
-  const title = getRandomElement(goalTypes);
-  const completion = Math.floor(Math.random() * 40) + 60; // 60% to 100%
-  const metrics: Record<string, string | number> = { completion: `${completion}%` };
-  
-  let description = '';
-  if (title === 'Weekly Goal Completed') {
-    const target = Math.floor(Math.random() * 3) + 3;
-    description = `Hit your target of ${target} ${getRandomElement(user.preferences)} workouts this week`;
-    metrics.target = target;
-    metrics.achieved = completion === 100 ? target : Math.floor(target * completion / 100);
-  } else if (title === 'Monthly Challenge Progress') {
-    description = `Progress in your ${getRandomElement(user.preferences)} challenge`;
-    metrics.daysLeft = Math.floor(Math.random() * 15) + 1;
-  } else {
-    description = `Progress towards your ${getRandomElement(['weight', 'endurance', 'flexibility', 'strength'])} goal`;
-    metrics.remainingDays = Math.floor(Math.random() * 10) + 1;
-  }
-  
-  return {
-    id,
-    type: 'goal',
-    title,
-    description,
-    date: generateRandomDate(10),
-    metrics
-  };
-};
-
-// Generate random activities based on user account
 onMounted(async () => {
   try {
-    // Simulating API call - replace with actual API
-    // e.g. const response = await fetch('/api/activities/my');
-    // const data = await response.json();
-    
+    // Simulate API call with timeout
     setTimeout(() => {
-      const numberOfActivities = Math.floor(Math.random() * 4) + 3; // Generate 3-6 activities
-      const generatedActivities = [];
-      
-      for (let i = 1; i <= numberOfActivities; i++) {
-        const activityType = getRandomElement(['workout', 'achievement', 'goal']);
-        
-        if (activityType === 'workout') {
-          generatedActivities.push(generateWorkout(i));
-        } else if (activityType === 'achievement') {
-          generatedActivities.push(generateAchievement(i));
-        } else {
-          generatedActivities.push(generateGoal(i));
+      // Create activities for the current user
+      activities.value = [
+        { 
+          id: 1, 
+          user: {
+            id: 102,
+            name: userStore.currentUser(),
+            avatar: 'https://i.pravatar.cc/150?img=5'
+          },
+          type: 'workout', 
+          title: 'Morning Run', 
+          description: 'Started the day with a refreshing 5K run',
+          date: '2023-11-12T07:30:00',
+          metrics: { distance: '5km', time: '28min', pace: '5:36/km' },
+          likes: 8,
+          comments: 2,
+          image: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+        },
+        { 
+          id: 2, 
+          user: {
+            id: 102,
+            name: userStore.currentUser(),
+            avatar: 'https://i.pravatar.cc/150?img=5'
+          },
+          type: 'goal', 
+          title: 'Monthly Fitness Goal', 
+          description: 'On track to complete my monthly fitness goal!',
+          date: '2023-11-10T12:45:00',
+          metrics: { completion: '75%', daysLeft: 8 },
+          likes: 12,
+          comments: 3,
+          image: null
+        },
+        { 
+          id: 3, 
+          user: {
+            id: 102,
+            name: userStore.currentUser(),
+            avatar: 'https://i.pravatar.cc/150?img=5'
+          },
+          type: 'achievement', 
+          title: 'New Personal Record', 
+          description: 'Set a new personal record for push-ups today!',
+          date: '2023-11-08T18:20:00',
+          metrics: { count: '52 reps', improvement: '+5 from last record' },
+          likes: 15,
+          comments: 5,
+          image: 'https://images.unsplash.com/photo-1571019613576-2b22c76fd955?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
         }
-      }
-      
-      // Sort by date (newest first)
-      generatedActivities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      
-      activities.value = generatedActivities;
+      ];
       loading.value = false;
     }, 500);
   } catch (err) {
-    error.value = 'Failed to load activities';
+    error.value = 'Failed to load your activities';
     loading.value = false;
     console.error(err);
   }
@@ -203,6 +79,13 @@ const formatDate = (dateString: string) => {
     hour: '2-digit',
     minute: '2-digit'
   });
+};
+
+const likeActivity = (id: number) => {
+  const activity = activities.value.find(a => a.id === id);
+  if (activity) {
+    activity.likes++;
+  }
 };
 </script>
 
@@ -226,23 +109,48 @@ const formatDate = (dateString: string) => {
       
       <div v-else class="activities-list">
         <div v-for="activity in activities" :key="activity.id" class="activity-card card">
-          <div class="activity-header">
-            <h3>{{ activity.title }}</h3>
-            <span class="activity-date">{{ formatDate(activity.date) }}</span>
-          </div>
-          
-          <p class="activity-description">{{ activity.description }}</p>
-          
-          <div class="activity-metrics">
-            <div v-for="(value, key) in activity.metrics" :key="key" class="metric">
-              <span class="metric-value">{{ value }}</span>
-              <span class="metric-label">{{ key }}</span>
+          <div class="user-info">
+            <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
+            <div>
+              <h3 class="user-name">
+                {{ activity.user.name }}
+              </h3>
+              <span class="activity-date">{{ formatDate(activity.date) }}</span>
             </div>
           </div>
           
-          <div class="activity-actions">
-            <button class="btn-small">Edit</button>
-            <button class="btn-small btn-secondary">Share</button>
+          <div class="activity-content">
+            <h4 class="activity-title">{{ activity.title }}</h4>
+            <p class="activity-description">{{ activity.description }}</p>
+            
+            <!-- Activity Image -->
+            <div v-if="activity.image" class="activity-image-container">
+              <img :src="activity.image" :alt="activity.title" class="activity-image">
+            </div>
+            
+            <div class="activity-metrics">
+              <div v-for="(value, key) in activity.metrics" :key="key" class="metric">
+                <span class="metric-value">{{ value }}</span>
+                <span class="metric-label">{{ key }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="activity-engagement">
+            <div class="engagement-stats">
+              <span>{{ activity.likes }} likes</span>
+              <span>{{ activity.comments }} comments</span>
+            </div>
+            
+            <div class="engagement-actions">
+              <button class="engagement-btn" @click="likeActivity(activity.id)">
+                👍 Like
+              </button>
+              <button class="engagement-btn">
+                💬 Comment
+              </button>
+              <button class="btn-small">Edit</button>
+            </div>
           </div>
         </div>
       </div>
@@ -280,16 +188,37 @@ const formatDate = (dateString: string) => {
   margin-bottom: 1.5rem;
 }
 
-.activity-header {
+.user-info {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-right: 1rem;
+  object-fit: cover;
+}
+
+.user-name {
+  margin-bottom: 0.25rem;
+  font-size: 1.1rem;
 }
 
 .activity-date {
   font-size: 0.85rem;
   color: var(--text-secondary);
+}
+
+.activity-content {
+  margin-bottom: 1.5rem;
+}
+
+.activity-title {
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
 }
 
 .activity-description {
@@ -299,8 +228,11 @@ const formatDate = (dateString: string) => {
 .activity-metrics {
   display: flex;
   gap: 1.5rem;
-  margin-bottom: 1.5rem;
+  margin-top: 1rem;
   flex-wrap: wrap;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 1rem;
+  border-radius: 6px;
 }
 
 .metric {
@@ -310,7 +242,7 @@ const formatDate = (dateString: string) => {
 }
 
 .metric-value {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: bold;
   color: var(--highlight);
 }
@@ -321,23 +253,70 @@ const formatDate = (dateString: string) => {
   text-transform: capitalize;
 }
 
-.activity-actions {
+.activity-image-container {
+  margin: 1rem 0;
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.activity-image {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.activity-image:hover {
+  transform: scale(1.02);
+}
+
+.activity-engagement {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1rem;
+}
+
+.engagement-stats {
   display: flex;
-  gap: 0.75rem;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.engagement-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.engagement-btn {
+  background-color: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.engagement-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
 }
 
 .btn-small {
   padding: 0.5rem 1rem;
   font-size: 0.85rem;
+  background-color: var(--accent-color);
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
 }
 
-.btn-secondary {
-  background-color: transparent;
-  border: 1px solid var(--accent-color);
-  color: var(--accent-color);
-}
-
-.btn-secondary:hover {
-  background-color: rgba(93, 93, 255, 0.1);
+.btn-small:hover {
+  background-color: var(--highlight);
 }
 </style>

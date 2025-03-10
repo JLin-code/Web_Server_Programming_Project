@@ -131,7 +131,7 @@ function logout() {
             <div class="navbar-menu" :class="{ 'is-active': isActive }">
                 <div class="navbar-start">
                     <!-- Mobile-only duplicates -->
-                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/') && router.push('/')">
+                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/') && router.push('/my-activity')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-running"></i>
@@ -159,7 +159,7 @@ function logout() {
                     </a>
                     
                     <!-- Items in burger on mobile -->
-                    <a class="navbar-item" @click="checkLoginBeforeNav('/search') && router.push('/search')">
+                    <a class="navbar-item" @click="checkLoginBeforeNav('/search') && router.push('/people-search')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-search"></i>

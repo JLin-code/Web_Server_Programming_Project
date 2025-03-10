@@ -42,6 +42,7 @@ onMounted(async () => {
       
       <div v-else class="activities-list">
         <div v-for="activity in filteredActivities" :key="activity.id" class="activity-card card">
+          <div class="delete-button" @click="activityStore.deleteActivity(activity.id)">✕</div>
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>
@@ -257,5 +258,27 @@ onMounted(async () => {
 
 .btn-small:hover {
   background-color: var(--highlight);
+}
+
+.delete-button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.delete-button:hover {
+  background: rgba(255, 0, 0, 0.6);
+  opacity: 1;
 }
 </style>

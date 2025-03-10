@@ -75,6 +75,54 @@ onMounted(async () => {
           comments: 6,
           image: "https://images.unsplash.com/photo-1554284126-aa88f22d8b74?q=80&w=1988&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
         },
+        { 
+          id: 5, 
+          user: {
+            id: 102,
+            name: "Major Major",
+            avatar: 'https://i.pravatar.cc/150?img=33'
+          },
+          type: 'workout', 
+          title: 'Cycling Session', 
+          description: 'Completed a 20-mile cycling session along the coastal route',
+          date: '2023-11-07T15:20:00',
+          metrics: { distance: '20mi', time: '1h 15min', elevation: '320ft' },
+          likes: 15,
+          comments: 4,
+          image: 'https://images.unsplash.com/photo-1541625602330-2277a4c46182?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3'
+        },
+        { 
+          id: 6,
+          user: {
+            id: 106,
+            name: "Jane Smith",
+            avatar: 'https://i.pravatar.cc/150?img=5'
+          },
+          type: 'workout', 
+          title: 'Mountain Hike', 
+          description: 'Spent the afternoon hiking up Sunset Peak — breathtaking views at the top!',
+          date: '2023-11-16T14:30:00',
+          metrics: { distance: '8km', time: '3h', elevation: '2,000ft' },
+          likes: 64,
+          comments: 4,
+          image: 'https://images.unsplash.com/photo-1506748686214-e9df14d4d9d0?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3'
+        },
+        { 
+          id: 7, 
+          user: {
+            id: 104,
+            name: "John Doe",
+            avatar: 'https://i.pravatar.cc/150?img=52'
+          },
+          type: 'achievement', 
+          title: '5K Swim Milestone', 
+          description: 'Proud to have completed my first 5K swim without stopping!',
+          date: '2023-11-14T08:00:00',
+          metrics: { distance: '5km', time: '1h 30min', strokes: 'Freestyle' },
+          likes: 30,
+          comments: 5,
+          image: 'https://plus.unsplash.com/premium_photo-1663089983823-b69bb7ccd4f6?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'
+        },
       ];
       loading.value = false;
     }, 500);

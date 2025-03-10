@@ -1,90 +1,26 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { userStore } from '@/stores/userStore';
+import { activityStore } from '@/stores/activityStore';
 
 const page = 'My Activity';
-const activities = ref<any[]>([]);
-const loading = ref(true);
-const error = ref('');
+
+// Computed property to filter activities based on current user's name
+const filteredActivities = computed(() => {
+  const currentUser = userStore.currentUser();
+  return activityStore.activities.value.filter(activity => activity.user.name === currentUser);
+});
 
 onMounted(async () => {
   try {
-    setTimeout(() => {
-      activities.value = [
-        { 
-          id: 1, 
-          user: {
-            id: 102,
-            name: userStore.currentUser(),
-            avatar: 'https://i.pravatar.cc/150?img=5'
-          },
-          type: 'workout', 
-          title: 'Morning Run', 
-          description: 'Started the day with a refreshing 5K run',
-          date: '2023-11-12T07:30:00',
-          metrics: { distance: '5km', time: '28min', pace: '5:36/km' },
-          likes: 8,
-          comments: 2,
-          image: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-        },
-        { 
-          id: 2, 
-          user: {
-            id: 102,
-            name: userStore.currentUser(),
-            avatar: 'https://i.pravatar.cc/150?img=5'
-          },
-          type: 'goal', 
-          title: 'Monthly Fitness Goal', 
-          description: 'On track to complete my monthly fitness goal!',
-          date: '2023-11-10T12:45:00',
-          metrics: { completion: '75%', daysLeft: 8 },
-          likes: 12,
-          comments: 3,
-          image: null
-        },
-        { 
-          id: 3, 
-          user: {
-            id: 102,
-            name: userStore.currentUser(),
-            avatar: 'https://i.pravatar.cc/150?img=5'
-          },
-          type: 'achievement', 
-          title: 'New Personal Record', 
-          description: 'Set a new personal record for push-ups today!',
-          date: '2023-11-08T18:20:00',
-          metrics: { count: '52 reps', improvement: '+5 from last record' },
-          likes: 15,
-          comments: 5,
-          image: 'https://images.unsplash.com/photo-1571019613576-2b22c76fd955?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-        }
-      ];
-      loading.value = false;
-    }, 500);
+    if (activityStore.activities.value.length === 0) {
+      activityStore.initializeActivities();
+    }
   } catch (err) {
-    error.value = 'Failed to load your activities';
-    loading.value = false;
+    activityStore.error.value = 'Failed to load your activities';
     console.error(err);
   }
 });
-
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
-const likeActivity = (id: number) => {
-  const activity = activities.value.find(a => a.id === id);
-  if (activity) {
-    activity.likes++;
-  }
-};
 </script>
 
 <template>
@@ -92,28 +28,27 @@ const likeActivity = (id: number) => {
     <h1 class="title">{{ page }}</h1>
     
     <div class="activities-container">
-      <div v-if="loading" class="loading">
+      <div v-if="activityStore.loading.value" class="loading">
         <p>Loading your activities...</p>
       </div>
       
-      <div v-else-if="error" class="error">
-        <p>{{ error }}</p>
+      <div v-else-if="activityStore.error.value" class="error">
+        <p>{{ activityStore.error.value }}</p>
       </div>
       
-      <div v-else-if="activities.length === 0" class="empty-state">
-        <p>You haven't recorded any activities yet.</p>
-        <button class="btn">Record New Activity</button>
+      <div v-else-if="filteredActivities.length === 0" class="empty-state">
+        <p>No activities found for {{ userStore.currentUser() }}.</p>
       </div>
       
       <div v-else class="activities-list">
-        <div v-for="activity in activities" :key="activity.id" class="activity-card card">
+        <div v-for="activity in filteredActivities" :key="activity.id" class="activity-card card">
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>
               <h3 class="user-name">
                 {{ activity.user.name }}
               </h3>
-              <span class="activity-date">{{ formatDate(activity.date) }}</span>
+              <span class="activity-date">{{ activityStore.formatDate(activity.date) }}</span>
             </div>
           </div>
           
@@ -121,7 +56,6 @@ const likeActivity = (id: number) => {
             <h4 class="activity-title">{{ activity.title }}</h4>
             <p class="activity-description">{{ activity.description }}</p>
             
-            <!-- Activity Image -->
             <div v-if="activity.image" class="activity-image-container">
               <img :src="activity.image" :alt="activity.title" class="activity-image">
             </div>
@@ -141,7 +75,7 @@ const likeActivity = (id: number) => {
             </div>
             
             <div class="engagement-actions">
-              <button class="engagement-btn" @click="likeActivity(activity.id)">
+              <button class="engagement-btn" @click="activityStore.likeActivity(activity.id)">
                 👍 Like
               </button>
               <button class="engagement-btn">
@@ -184,6 +118,7 @@ const likeActivity = (id: number) => {
 
 .activity-card {
   margin-bottom: 1.5rem;
+  position: relative;
 }
 
 .user-info {

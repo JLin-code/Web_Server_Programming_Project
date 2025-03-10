@@ -9,9 +9,7 @@ const error = ref('');
 
 onMounted(async () => {
   try {
-    // Simulate API call with timeout
     setTimeout(() => {
-      // Create activities for the current user
       activities.value = [
         { 
           id: 1, 
@@ -219,6 +217,8 @@ const likeActivity = (id: number) => {
 .activity-title {
   margin-bottom: 0.5rem;
   color: var(--text-primary);
+  font-size: 1.4rem;
+  font-weight: 600; 
 }
 
 .activity-description {

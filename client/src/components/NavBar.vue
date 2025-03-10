@@ -110,7 +110,7 @@ function logout() {
                     </span>
                 </a>
                 
-                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/friends') && router.push('/friends')">
+                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/friends') && router.push('/friend-activity')">
                     <span class="icon-text">
                         <span class="icon">
                             <i class="fas fa-users"></i>

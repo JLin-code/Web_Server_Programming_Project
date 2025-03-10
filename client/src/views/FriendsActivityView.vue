@@ -2,111 +2,72 @@
 import { ref, onMounted } from 'vue';
 import { userStore } from '@/stores/userStore';
 
-const page = 'Friend Activity';
+const page = 'Friends Activity';
 const activities = ref<any[]>([]);
 const loading = ref(true);
 const error = ref('');
 
 onMounted(async () => {
   try {
-    // Simulate API call with timeout
     setTimeout(() => {
-      // Create activities that match with the users from the navbar
       activities.value = [
         { 
           id: 1, 
           user: {
-            id: 101,
-            name: 'Jane Smith',
-            avatar: 'https://i.pravatar.cc/150?img=1'
+            id: 102,
+            name: userStore.currentUser(),
+            avatar: 'https://i.pravatar.cc/150?img=5'
           },
           type: 'workout', 
-          title: 'Evening Yoga', 
-          description: 'Relaxing evening yoga session',
-          date: '2023-11-10T19:30:00',
-          metrics: { duration: '45min', type: 'Vinyasa' },
-          likes: 12,
-          comments: 3,
-          image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+          title: 'Morning Run', 
+          description: 'Started the day with a refreshing 5K run',
+          date: '2023-11-12T07:30:00',
+          metrics: { distance: '5km', time: '28min', pace: '5:36/km' },
+          likes: 8,
+          comments: 2,
+          image: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
         },
         { 
           id: 2, 
           user: {
             id: 102,
-            name: 'John Doe',
+            name: userStore.currentUser(),
             avatar: 'https://i.pravatar.cc/150?img=5'
           },
-          type: 'achievement', 
-          title: 'Marathon Completed!', 
-          description: 'Finished my first full marathon',
-          date: '2023-11-09T11:20:00',
-          metrics: { distance: '42.2km', time: '4h 15min' },
-          likes: 45,
-          comments: 8,
-          image: 'https://images.unsplash.com/photo-1530549387789-4c1017266635?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+          type: 'goal', 
+          title: 'Monthly Fitness Goal', 
+          description: 'On track to complete my monthly fitness goal!',
+          date: '2023-11-10T12:45:00',
+          metrics: { completion: '75%', daysLeft: 8 },
+          likes: 12,
+          comments: 3,
+          image: null
         },
         { 
           id: 3, 
           user: {
-            id: 103,
-            name: 'Major Major',
-            avatar: 'https://i.pravatar.cc/150?img=3'
-          },
-          type: 'workout', 
-          title: 'Weight Training', 
-          description: 'Hit a new PR on deadlift today',
-          date: '2023-11-08T16:45:00',
-          metrics: { weight: '120kg', sets: 3, reps: 5 },
-          likes: 18,
-          comments: 4,
-          image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-        },
-        { 
-          id: 4, 
-          user: {
-            id: 104,
-            name: 'Laura Green',
-            avatar: 'https://i.pravatar.cc/150?img=9'
-          },
-          type: 'goal', 
-          title: 'New Challenge', 
-          description: 'Starting a 30-day HIIT challenge',
-          date: '2023-11-07T08:15:00',
-          metrics: { duration: '30 days', difficulty: 'Intermediate' },
-          likes: 8,
-          comments: 2,
-          image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
-        },
-        { 
-          id: 5, 
-          user: {
-            id: 100,
-            name: 'Admin',
-            avatar: 'https://i.pravatar.cc/150?img=12'
+            id: 102,
+            name: userStore.currentUser(),
+            avatar: 'https://i.pravatar.cc/150?img=5'
           },
           type: 'achievement', 
           title: 'New Personal Record', 
-          description: 'Just set a new personal best on my 10K time!',
-          date: '2023-11-06T07:30:00',
-          metrics: { distance: '10km', time: '42:30', pace: '4:15/km' },
-          likes: 24,
-          comments: 6,
-          image: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
+          description: 'Set a new personal record for push-ups today!',
+          date: '2023-11-08T18:20:00',
+          metrics: { count: '52 reps', improvement: '+5 from last record' },
+          likes: 15,
+          comments: 5,
+          image: 'https://images.unsplash.com/photo-1571019613576-2b22c76fd955?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'
         }
       ];
       loading.value = false;
     }, 500);
   } catch (err) {
-    error.value = 'Failed to load friend activities';
+    error.value = 'Failed to load your activities';
     loading.value = false;
     console.error(err);
   }
 });
-
-// Function to check if the current user is the author of an activity
-const isOwnActivity = (userName: string) => {
-  return userStore.currentUser() === userName;
-};
 
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -132,7 +93,7 @@ const likeActivity = (id: number) => {
     
     <div class="activities-container">
       <div v-if="loading" class="loading">
-        <p>Loading friend activities...</p>
+        <p>Loading your activities...</p>
       </div>
       
       <div v-else-if="error" class="error">
@@ -140,8 +101,8 @@ const likeActivity = (id: number) => {
       </div>
       
       <div v-else-if="activities.length === 0" class="empty-state">
-        <p>No friend activities to display. Add friends to see their activities here.</p>
-        <button class="btn">Find Friends</button>
+        <p>You haven't recorded any activities yet.</p>
+        <button class="btn">Record New Activity</button>
       </div>
       
       <div v-else class="activities-list">
@@ -151,7 +112,6 @@ const likeActivity = (id: number) => {
             <div>
               <h3 class="user-name">
                 {{ activity.user.name }}
-                <span v-if="isOwnActivity(activity.user.name)" class="own-activity-badge">(You)</span>
               </h3>
               <span class="activity-date">{{ formatDate(activity.date) }}</span>
             </div>
@@ -187,6 +147,7 @@ const likeActivity = (id: number) => {
               <button class="engagement-btn">
                 💬 Comment
               </button>
+              <button class="btn-small">Edit</button>
             </div>
           </div>
         </div>
@@ -256,6 +217,8 @@ const likeActivity = (id: number) => {
 .activity-title {
   margin-bottom: 0.5rem;
   color: var(--text-primary);
+  font-size: 1.4rem;
+  font-weight: 600; 
 }
 
 .activity-description {
@@ -264,18 +227,22 @@ const likeActivity = (id: number) => {
 
 .activity-metrics {
   display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 1.5rem;
   margin-top: 1rem;
   flex-wrap: wrap;
   background-color: rgba(0, 0, 0, 0.2);
   padding: 1rem;
   border-radius: 6px;
+  text-align: center;
 }
 
 .metric {
   display: flex;
   flex-direction: column;
   align-items: center;
+  margin: 0 0.5rem;
 }
 
 .metric-value {
@@ -342,10 +309,18 @@ const likeActivity = (id: number) => {
   color: var(--text-primary);
 }
 
-.own-activity-badge {
-  font-size: 0.8rem;
-  color: var(--highlight);
-  margin-left: 0.5rem;
-  font-weight: normal;
+.btn-small {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  background-color: var(--accent-color);
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.btn-small:hover {
+  background-color: var(--highlight);
 }
 </style>

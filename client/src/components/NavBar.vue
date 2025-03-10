@@ -92,7 +92,7 @@ function logout() {
                 </a>
 
                 <!-- Always visible on desktop -->
-                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/') && router.push('/')">
+                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/') && router.push('/my-activity')">
                     <span class="icon-text">
                         <span class="icon">
                             <i class="fas fa-running"></i>

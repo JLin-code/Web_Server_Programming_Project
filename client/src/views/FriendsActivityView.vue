@@ -74,7 +74,7 @@ onMounted(async () => {
           likes: 32,
           comments: 6,
           image: "https://images.unsplash.com/photo-1554284126-aa88f22d8b74?q=80&w=1988&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"
-        }
+        },
       ];
       loading.value = false;
     }, 500);
@@ -101,6 +101,10 @@ const likeActivity = (id: number) => {
     activity.likes++;
   }
 };
+
+const deleteActivity = (id: number) => {
+  activities.value = activities.value.filter(a => a.id !== id);
+};
 </script>
 
 <template>
@@ -123,6 +127,7 @@ const likeActivity = (id: number) => {
       
       <div v-else class="activities-list">
         <div v-for="activity in activities" :key="activity.id" class="activity-card card">
+          <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>
@@ -199,6 +204,7 @@ const likeActivity = (id: number) => {
 
 .activity-card {
   margin-bottom: 1.5rem;
+  position: relative;
 }
 
 .user-info {
@@ -337,5 +343,27 @@ const likeActivity = (id: number) => {
 
 .btn-small:hover {
   background-color: var(--highlight);
+}
+
+.delete-button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.delete-button:hover {
+  background: rgba(255, 0, 0, 0.6);
+  opacity: 1;
 }
 </style>

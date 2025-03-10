@@ -1,8 +1,0 @@
-services:
-  - type: web
-    name: your-app-name
-    buildCommand: npm install && npm run build
-    publishDir: client/dist  # or client/build depending on your setup
-    env:
-      - key: NODE_VERSION
-        value: 18.x  # Or another stable version

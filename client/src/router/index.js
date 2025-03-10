@@ -1,50 +1,53 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var vue_router_1 = require("vue-router");
-var HomeView_vue_1 = require("../views/HomeView.vue");
-var PeopleSearchView_vue_1 = require("../views/PeopleSearchView.vue");
-var MyActivityView_vue_1 = require("../views/MyActivityView.vue");
-var ManageUsersView_vue_1 = require("../views/ManageUsersView.vue");
-var SignUpView_vue_1 = require("../views/SignUpView.vue");
-var FriendsActivityView_vue_1 = require("../views/FriendsActivityView.vue");
-var router = (0, vue_router_1.createRouter)({
-    history: (0, vue_router_1.createWebHistory)(''),
+
+import { createRouter, createWebHistory } from "vue-router";
+import HomeView from "../views/HomeView.vue";
+import PeopleSearchView from "../views/PeopleSearchView.vue";
+import MyActivityView from "../views/MyActivityView.vue";
+import ManageUsersView from "../views/ManageUsersView.vue";
+import SignUpView from "../views/SignUpView.vue";
+import FriendsActivityView from "../views/FriendsActivityView.vue";
+
+const router = createRouter({
+    history: createWebHistory(''),
     routes: [
         {
             path: '/',
             name: 'home',
-            component: HomeView_vue_1.default,
+            component: HomeView,
         },
         {
             path: '/friend-activity',
             name: 'friendActivity',
-            component: FriendsActivityView_vue_1.default,
+            component: FriendsActivityView,
         },
         {
             path: '/friends-activity',
             name: 'friendsActivity',
-            component: FriendsActivityView_vue_1.default,
+            component: FriendsActivityView,
         },
         {
             path: '/my-activity',
             name: 'myActivity',
-            component: MyActivityView_vue_1.default,
+            component: MyActivityView,
         },
         {
             path: '/people-search',
             name: 'peopleSearch',
-            component: PeopleSearchView_vue_1.default,
+            component: PeopleSearchView,
         },
         {
             path: '/manage-users',
             name: 'manageUsers',
-            component: ManageUsersView_vue_1.default,
+            component: ManageUsersView,
         },
         {
             path: '/signup',
             name: 'signup',
-            component: SignUpView_vue_1.default,
+            component: SignUpView,
         },
     ],
 });
+
 exports.default = router;

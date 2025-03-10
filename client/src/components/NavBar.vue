@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { userStore } from '@/stores/userStore'
+import { userStore } from '../stores/userStore'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()

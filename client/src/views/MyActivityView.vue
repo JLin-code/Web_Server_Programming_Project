@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import { userStore } from '@/stores/userStore';
-import { activityStore } from '@/stores/activityStore';
+import { userStore } from '../stores/userStore';
+import { activityStore } from '../stores/activityStore';
 
 const page = 'My Activity';
 

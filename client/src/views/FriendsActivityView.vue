@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { activityStore } from '@/stores/activityStore';
+import { activityStore } from '../stores/activityStore';
 
 const page = 'Friends Activity';
 

@@ -7,7 +7,7 @@ import SignUpView from '../views/SignUpView.vue'
 import FriendsActivityView from '../views/FriendsActivityView.vue'
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHistory(''),
   routes: [
     {
       path: '/',

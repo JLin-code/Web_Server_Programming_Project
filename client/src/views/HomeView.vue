@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { userStore } from '@/stores/userStore';
+import { userStore } from '../stores/userStore';
 
 // Define type for time periods
 type TimePeriod = 'day' | 'week' | 'month' | 'allTime';

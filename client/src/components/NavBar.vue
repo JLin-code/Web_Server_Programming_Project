@@ -87,7 +87,7 @@ function logout() {
     <nav class="navbar is-info" role="navigation" aria-label="main navigation" @click.self="closeDropdowns">
         <div class="container">
             <div class="navbar-brand">
-                <a class="navbar-item">
+                <a class="navbar-item" @click="router.push('/')">
                     <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="30" />
                 </a>
 
@@ -101,7 +101,7 @@ function logout() {
                     </span>
                 </a>
                 
-                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/statistics') && router.push('/statistics')">
+                <a class="navbar-item is-hidden-mobile" @click="router.push('/')">
                     <span class="icon-text">
                         <span class="icon">
                             <i class="fas fa-chart-bar"></i>
@@ -140,7 +140,7 @@ function logout() {
                         </span>
                     </a>
                     
-                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/statistics') && router.push('/statistics')">
+                    <a class="navbar-item is-hidden-tablet" @click="router.push('/')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-chart-bar"></i>

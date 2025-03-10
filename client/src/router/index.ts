@@ -4,7 +4,6 @@ import PeopleSearchView from '../views/PeopleSearchView.vue'
 import MyActivityView from '../views/MyActivityView.vue'
 import ManageUsersView from '../views/ManageUsersView.vue'
 import SignUpView from '../views/SignUpView.vue'
-import StatisticsView from '../views/StatisticsView.vue'
 import FriendsActivityView from '../views/FriendsActivityView.vue'
 
 const router = createRouter({
@@ -45,11 +44,6 @@ const router = createRouter({
       name: 'signup',
       component: SignUpView,
     },
-    {
-      path: '/statistics',
-      name: 'statistics',
-      component: StatisticsView,
-    }
   ],
 })
 

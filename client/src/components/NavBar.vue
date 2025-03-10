@@ -14,7 +14,6 @@ const currentUser = ref({
     isAdmin: false
 })
 
-// Sync state with the store on mount
 onMounted(() => {
   isLoggedIn.value = userStore.isLoggedIn();
   if (isLoggedIn.value) {
@@ -47,7 +46,6 @@ function toggleBurger() {
   }
 }
 
-// Function to check login status before navigation
 function checkLoginBeforeNav(route: string) {
   if (!isLoggedIn.value) {
     attemptedRoute.value = route
@@ -63,10 +61,8 @@ function login(username: string, admin: boolean = false) {
   isLoggedIn.value = true
   isLoginDropdownActive.value = false
   
-  // Update the user store
   userStore.login(username)
-  
-  // If there was an attempted route, navigate there
+
   if (attemptedRoute.value) {
     router.push(attemptedRoute.value)
     attemptedRoute.value = ''
@@ -78,7 +74,6 @@ function logout() {
   currentUser.value.name = ''
   currentUser.value.isAdmin = false
   
-  // Update the user store
   userStore.logout()
 }
 </script>

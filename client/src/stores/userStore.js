@@ -81,34 +81,3 @@ var getters = {
     }
 };
 exports.userStore = __assign(__assign({ state: (0, vue_1.readonly)(state) }, actions), getters);
-import { reactive } from 'vue'
-
-// Create a reactive store for user state management
-const state = reactive({
-  loggedIn: false,
-  user: null
-})
-
-export const userStore = {
-  // Method to check login status
-  isLoggedIn() {
-    return state.loggedIn
-  },
-  
-  // Method to get current user info
-  currentUser() {
-    return state.user
-  },
-  
-  // Method to handle login
-  login(username) {
-    state.loggedIn = true
-    state.user = username
-  },
-  
-  // Method to handle logout
-  logout() {
-    state.loggedIn = false
-    state.user = null
-  }
-}

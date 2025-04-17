@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { userStore } from './userStore';
 
 // Define activity type
 interface User {
@@ -162,6 +163,50 @@ const likeActivity = (id: number) => {
   }
 };
 
+// Add a new activity
+const addActivity = (
+  title: string,
+  description: string,
+  type: string,
+  metrics: Metrics,
+  image: string | null = null
+) => {
+  // Generate a new ID (in a real app, this would be handled by the backend)
+  const newId = activities.value.length > 0 
+    ? Math.max(...activities.value.map(a => a.id)) + 1 
+    : 1;
+  
+  // Get current user from userStore
+  const userName = userStore.currentUser();
+  // Find a user with matching name from existing activities or create default
+  const existingUser = activities.value.find(a => a.user.name === userName)?.user;
+  
+  const currentUser = existingUser || {
+    id: userStore.userId || 101, 
+    name: userName || "Anonymous User", 
+    avatar: 'https://i.pravatar.cc/150?img=1'
+  };
+  
+  // Create a new activity
+  const newActivity: Activity = {
+    id: newId,
+    user: currentUser,
+    type,
+    title,
+    description,
+    date: new Date().toISOString(),
+    metrics,
+    likes: 0,
+    comments: 0,
+    image
+  };
+  
+  // Add the new activity to the beginning of the array
+  activities.value.unshift(newActivity);
+  
+  return newActivity;
+};
+
 // Format date helper
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -180,5 +225,6 @@ export const activityStore = {
   initializeActivities,
   deleteActivity,
   likeActivity,
-  formatDate
+  formatDate,
+  addActivity
 };

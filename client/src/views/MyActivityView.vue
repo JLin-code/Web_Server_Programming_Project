@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { userStore } from '../stores/userStore';
 import { activityStore } from '../stores/activityStore';
+import AddActivityForm from '../components/AddActivityForm.vue';
 
 const page = 'My Activity';
+const showAddForm = ref(false);
 
 // Computed property to filter activities based on current user's name
 const filteredActivities = computed(() => {
@@ -21,11 +23,31 @@ onMounted(async () => {
     console.error(err);
   }
 });
+
+const toggleAddForm = () => {
+  showAddForm.value = !showAddForm.value;
+};
+
+const handleActivityAdded = () => {
+  showAddForm.value = false;
+  // You could add a success message here if desired
+};
 </script>
 
 <template>
   <main>
-    <h1 class="title">{{ page }}</h1>
+    <div class="header-actions">
+      <h1 class="title">{{ page }}</h1>
+      <button class="btn-primary" @click="toggleAddForm" v-if="!showAddForm">
+        Add New Activity
+      </button>
+    </div>
+    
+    <AddActivityForm 
+      v-if="showAddForm" 
+      @activity-added="handleActivityAdded" 
+      @cancel="showAddForm = false"
+    />
     
     <div class="activities-container">
       <div v-if="activityStore.loading.value" class="loading">
@@ -38,6 +60,7 @@ onMounted(async () => {
       
       <div v-else-if="filteredActivities.length === 0" class="empty-state">
         <p>No activities found for {{ userStore.currentUser() }}.</p>
+        <button class="btn" @click="toggleAddForm">Record New Activity</button>
       </div>
       
       <div v-else class="activities-list">
@@ -280,5 +303,21 @@ onMounted(async () => {
 .delete-button:hover {
   background: rgba(255, 0, 0, 0.6);
   opacity: 1;
+}
+
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.btn-primary {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 </style>

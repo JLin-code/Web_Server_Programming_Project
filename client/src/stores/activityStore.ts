@@ -1,6 +1,5 @@
 import { ref } from 'vue';
 import { userStore } from './userStore';
-
 // Define activity type
 interface User {
   id: number;
@@ -216,6 +215,15 @@ const formatDate = (dateString: string) => {
     hour: '2-digit',
     minute: '2-digit'
   });
+= response.items;
+  } catch (err) {
+    console.error('Failed to load activities:', err);
+    error.value = 'Failed to load activities';
+    // Fallback to mock data
+    mockInitializeActivities();
+  } finally {
+    loading.value = false;
+  }
 };
 
 export const activityStore = {

@@ -9,6 +9,7 @@ const { router: authController, authenticateToken } = require('./controllers/aut
 const productsController = require('./controllers/products');
 const usersController = require('./controllers/users');
 const friendsController = require('./controllers/friends');
+const activitiesController = require('./controllers/activities');
 
 const PORT = process.env.PORT ?? 3000;
 const app = express();
@@ -35,6 +36,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/v1/products', authenticateToken, productsController);
 app.use('/api/v1/users', authenticateToken, usersController);
 app.use('/api/v1/friends', authenticateToken, friendsController);
+app.use('/api/v1/activities', authenticateToken, activitiesController);
 
 // Catch-all route to serve the client app for SPA routing
 app.get('*', (req, res) => {

@@ -15,6 +15,11 @@ const currentUser = ref({
     isAdmin: false
 });
 
+// Toggles the burger menu visibility
+function toggleBurger() {
+  isActive.value = !isActive.value;
+}
+
 onMounted(async () => {
   try {
     // Check if user is logged in
@@ -26,7 +31,7 @@ onMounted(async () => {
     }
     
     // Fetch demo users
-    const demoUsersResponse = await authService.getDemoUsers();
+    const demoUsersResponse = await authService.getUsers();
     if (demoUsersResponse && demoUsersResponse.users) {
       demoUsers.value = demoUsersResponse.users;
     }

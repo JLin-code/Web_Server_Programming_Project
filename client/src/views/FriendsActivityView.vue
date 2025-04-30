@@ -1,17 +1,44 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { activityStore } from '../stores/activityStore';
+import { activitiesService } from '../services/activitiesApi';
 
 const page = 'Friends Activity';
+const activities = ref([]);
+const loading = ref(true);
+const error = ref('');
+
+// Format date helper
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+// Delete activity function
+const deleteActivity = async (id: number) => {
+  try {
+    await activitiesService.delete(id);
+    activities.value = activities.value.filter(a => a.id !== id);
+  } catch (err) {
+    console.error('Failed to delete activity:', err);
+    error.value = 'Failed to delete activity';
+  }
+};
 
 onMounted(async () => {
   try {
-    if (activityStore.activities.value.length === 0) {
-      activityStore.initializeActivities();
-    }
+    loading.value = true;
+    const response = await activitiesService.getAll();
+    activities.value = response.items || [];
   } catch (err) {
-    activityStore.error.value = 'Failed to load activities';
+    error.value = 'Failed to load activities';
     console.error(err);
+  } finally {
+    loading.value = false;
   }
 });
 
@@ -22,29 +49,29 @@ onMounted(async () => {
     <h1 class="title">{{ page }}</h1>
     
     <div class="activities-container">
-      <div v-if="activityStore.loading.value" class="loading">
+      <div v-if="loading" class="loading">
         <p>Loading activities...</p>
       </div>
       
-      <div v-else-if="activityStore.error.value" class="error">
-        <p>{{ activityStore.error.value }}</p>
+      <div v-else-if="error" class="error">
+        <p>{{ error }}</p>
       </div>
       
-      <div v-else-if="activityStore.activities.value.length === 0" class="empty-state">
+      <div v-else-if="activities.length === 0" class="empty-state">
         <p>No activities have been recorded yet.</p>
         <button class="btn">Record New Activity</button>
       </div>
       
       <div v-else class="activities-list">
-        <div v-for="activity in activityStore.activities.value" :key="activity.id" class="activity-card card">
-          <div class="delete-button" @click="activityStore.deleteActivity(activity.id)">✕</div>
+        <div v-for="activity in activities" :key="activity.id" class="activity-card card">
+          <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>
               <h3 class="user-name">
                 {{ activity.user.name }}
               </h3>
-              <span class="activity-date">{{ activityStore.formatDate(activity.date) }}</span>
+              <span class="activity-date">{{ formatDate(activity.date) }}</span>
             </div>
           </div>
           
@@ -71,7 +98,7 @@ onMounted(async () => {
             </div>
             
             <div class="engagement-actions">
-              <button class="engagement-btn" @click="activityStore.likeActivity(activity.id)">
+              <button class="engagement-btn" @click="activity.likes++">
                 👍 Like
               </button>
               <button class="engagement-btn">

@@ -1,49 +1,50 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { userService, friendService } from '../services/api';
 
 const page = 'People Search';
 
-const users = ref([
-  { 
-    firstName: 'John', 
-    lastName: 'Doe', 
-    email: 'john.doe@example.com', 
-    handle: '@johndoe', 
-    isFriend: true 
-  },
-  { 
-    firstName: 'Jane', 
-    lastName: 'Smith', 
-    email: 'jane.smith@example.com', 
-    handle: '@janesmith', 
-    isFriend: true 
-  },
-  { 
-    firstName: 'Major', 
-    lastName: 'Major', 
-    email: 'major.major@example.com', 
-    handle: '@majormajor', 
-    isFriend: true 
-  },
-  { 
-    firstName: 'Laura', 
-    lastName: 'Green', 
-    email: 'laura.green@example.com', 
-    handle: '@lauragreen', 
-    isFriend: true 
-  },
-  { 
-    firstName: 'Administrator',
-    lastName: 'User',
-    email: 'admin@example.com',
-    handle: '@admin', 
-    isFriend: false
-  }
-]);
-
-
+// Users state
+const users = ref([]);
+const loading = ref(true);
+const error = ref('');
 const searchQuery = ref('');
+const currentUserId = ref(null);
 
+onMounted(async () => {
+  try {
+    loading.value = true;
+    
+    // Get current user
+    const userResponse = await userService.getCurrentUser();
+    if (userResponse && userResponse.user) {
+      currentUserId.value = userResponse.user.id;
+    }
+    
+    // Get all users
+    const response = await userService.getAll();
+    
+    // Get friends
+    const friendsResponse = await friendService.getFriends(currentUserId.value);
+    const friendIds = new Set(friendsResponse.items.map((friend: any) => friend.id));
+    
+    // Mark friends in the user list
+    users.value = response.items.map((user: any) => ({
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      email: user.email,
+      handle: user.handle || `@${user.first_name.toLowerCase()}`,
+      isFriend: friendIds.has(user.id)
+    }));
+    
+  } catch (err) {
+    error.value = 'Failed to load users';
+    console.error(err);
+  } finally {
+    loading.value = false;
+  }
+});
 
 function filteredUsers() {
   if (!searchQuery.value) {
@@ -59,16 +60,29 @@ function filteredUsers() {
   );
 }
 
-
-function addFriend(user: any) {
-  user.isFriend = true;
-  console.log(`Added ${user.firstName} as friend`);
+async function addFriend(user: any) {
+  try {
+    if (!currentUserId.value) return;
+    
+    await friendService.addFriend(currentUserId.value, user.id);
+    user.isFriend = true;
+    console.log(`Added ${user.firstName} as friend`);
+  } catch (err) {
+    console.error(`Failed to add ${user.firstName} as friend:`, err);
+  }
 }
 
-function removeFriend(user: any) {
+async function removeFriend(user: any) {
+  if (!currentUserId.value) return;
+  
   if (confirm(`Are you sure you want to remove ${user.firstName} ${user.lastName} from your friends?`)) {
-    user.isFriend = false;
-    console.log(`Removed ${user.firstName} from friends`);
+    try {
+      await friendService.removeFriend(currentUserId.value, user.id);
+      user.isFriend = false;
+      console.log(`Removed ${user.firstName} from friends`);
+    } catch (err) {
+      console.error(`Failed to remove ${user.firstName} from friends:`, err);
+    }
   }
 }
 </script>

@@ -1,25 +1,35 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { userStore } from '../stores/userStore';
+import { ref, reactive, onMounted } from 'vue';
+import { authService } from '../services/api';
 
 // Define type for time periods
 type TimePeriod = 'day' | 'week' | 'month' | 'allTime';
 
 // Page title
 const page = ref('Fitness Tracker');
+const username = ref('Guest');
 
-// Get user-specific data from store
-const trackingData = computed(() => {
-  return userStore.getUserData();
-});
-
-// Get current username for personalized display
-const username = computed(() => {
-  return userStore.currentUser() || 'Guest';
+// Mock tracking data - replace with API call when available
+const trackingData = reactive({
+  day: { steps: '8,421', calories: '1,234', distance: '5.2km' },
+  week: { steps: '52,340', calories: '8,742', distance: '32.1km' },
+  month: { steps: '248,750', calories: '36,240', distance: '154.3km' },
+  allTime: { steps: '1,042,360', calories: '146,320', distance: '682.7km' }
 });
 
 // Active tab state with proper typing
 const activeTab = ref<TimePeriod>('day');
+
+onMounted(async () => {
+  try {
+    const response = await authService.getCurrentUser();
+    if (response && response.user) {
+      username.value = `${response.user.first_name} ${response.user.last_name}`;
+    }
+  } catch (error) {
+    console.error('Failed to get current user:', error);
+  }
+});
 
 // Function to change active tab with proper typing
 function setActiveTab(tab: TimePeriod) {
@@ -51,17 +61,12 @@ function setActiveTab(tab: TimePeriod) {
     <div class="stats-container">
       <div class="stat-card">
         <div class="stat-title">Distance</div>
-        <div class="stat-value">{{ trackingData[activeTab].distance }} km</div>
+        <div class="stat-value">{{ trackingData[activeTab].distance }}</div>
       </div>
       
       <div class="stat-card">
-        <div class="stat-title">Duration</div>
-        <div class="stat-value">{{ trackingData[activeTab].duration }} min</div>
-      </div>
-      
-      <div class="stat-card">
-        <div class="stat-title">Avg Pace</div>
-        <div class="stat-value">{{ trackingData[activeTab].avgPace }} min/km</div>
+        <div class="stat-title">Steps</div>
+        <div class="stat-value">{{ trackingData[activeTab].steps }}</div>
       </div>
       
       <div class="stat-card">

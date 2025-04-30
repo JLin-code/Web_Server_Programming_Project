@@ -1,57 +1,48 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { userService } from '../services/api';
 
 const page = ref('Manage Users');
+const users = ref([]);
+const loading = ref(true);
+const error = ref('');
 
-// Mock user data for the table
-const users = ref([
-  { 
-    firstName: 'Admin', 
-    lastName: 'User', 
-    email: 'admin@example.com', 
-    handle: '@admin', 
-    isAdmin: true 
-  },
-  { 
-    firstName: 'John', 
-    lastName: 'Doe', 
-    email: 'john.doe@example.com', 
-    handle: '@johndoe', 
-    isAdmin: false 
-  },
-  { 
-    firstName: 'Jane', 
-    lastName: 'Smith', 
-    email: 'jane.smith@example.com', 
-    handle: '@janesmith', 
-    isAdmin: false 
-  },
-  { 
-    firstName: 'Major', 
-    lastName: 'Major', 
-    email: 'major.major@example.com', 
-    handle: '@majormajor', 
-    isAdmin: false 
-  },
-  { 
-    firstName: 'Laura', 
-    lastName: 'Green', 
-    email: 'laura.green@example.com', 
-    handle: '@lauragreen', 
-    isAdmin: false 
+onMounted(async () => {
+  try {
+    loading.value = true;
+    const response = await userService.getAll();
+    users.value = response.items.map((user: any) => ({
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      email: user.email,
+      handle: user.handle || `@${user.first_name.toLowerCase()}`,
+      isAdmin: user.role === 'admin'
+    }));
+  } catch (err) {
+    error.value = 'Failed to load users';
+    console.error(err);
+  } finally {
+    loading.value = false;
   }
-]);
+});
 
-// Placeholder functions for the buttons
-function editUser(user: any) {
+async function editUser(user: any) {
   console.log('Edit user:', user);
   alert(`Editing user: ${user.firstName} ${user.lastName}`);
+  // Implement actual edit functionality
 }
 
-function deleteUser(user: any) {
+async function deleteUser(user: any) {
   console.log('Delete user:', user);
   if (confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}?`)) {
-    console.log('User deleted (mock)');
+    try {
+      await userService.delete(user.id);
+      users.value = users.value.filter(u => u.id !== user.id);
+      console.log('User deleted');
+    } catch (err) {
+      console.error(`Failed to delete user:`, err);
+    }
   }
 }
 </script>

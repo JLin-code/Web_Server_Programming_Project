@@ -1,26 +1,32 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { userStore } from '../stores/userStore'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { authService } from '../services/api';
 
-const router = useRouter()
-const isActive = ref(false)
-const isLoginDropdownActive = ref(false)
-const isAdminDropdownActive = ref(false)
-const isLoggedIn = ref(false)
-const attemptedRoute = ref('')
+const router = useRouter();
+const isActive = ref(false);
+const isLoginDropdownActive = ref(false);
+const isAdminDropdownActive = ref(false);
+const isLoggedIn = ref(false);
+const attemptedRoute = ref('');
 const currentUser = ref({
     name: '',
     isAdmin: false
-})
+});
 
-onMounted(() => {
-  isLoggedIn.value = userStore.isLoggedIn();
-  if (isLoggedIn.value) {
-    currentUser.value.name = userStore.currentUser();
-    currentUser.value.isAdmin = currentUser.value.name === 'ADMIN';
+onMounted(async () => {
+  try {
+    const response = await authService.getCurrentUser();
+    if (response && response.user) {
+      isLoggedIn.value = true;
+      currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
+      currentUser.value.isAdmin = response.user.role === 'admin';
+    }
+  } catch (error) {
+    console.error('Not logged in or session expired');
+    isLoggedIn.value = false;
   }
-})
+});
 
 // Toggles dropdown while ensuring only one is open at a time
 function toggleDropdown(dropdown: string) {
@@ -38,43 +44,45 @@ function closeDropdowns() {
   isAdminDropdownActive.value = false;
 }
 
-// Closes dropdowns when opening burger menu to prevent UI conflicts
-function toggleBurger() {
-  isActive.value = !isActive.value;
-  if (isActive.value) {
-    closeDropdowns();
-  }
-}
-
 function checkLoginBeforeNav(route: string) {
   if (!isLoggedIn.value) {
-    attemptedRoute.value = route
-    isLoginDropdownActive.value = true
-    return false
+    attemptedRoute.value = route;
+    isLoginDropdownActive.value = true;
+    return false;
   }
-  return true
+  return true;
 }
 
-function login(username: string, admin: boolean = false) {
-  currentUser.value.name = username
-  currentUser.value.isAdmin = admin
-  isLoggedIn.value = true
-  isLoginDropdownActive.value = false
-  
-  userStore.login(username)
-
-  if (attemptedRoute.value) {
-    router.push(attemptedRoute.value)
-    attemptedRoute.value = ''
+async function login(username: string, password: string) {
+  try {
+    const response = await authService.login(username, password);
+    if (response.success) {
+      currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
+      currentUser.value.isAdmin = response.user.role === 'admin';
+      isLoggedIn.value = true;
+      isLoginDropdownActive.value = false;
+      
+      if (attemptedRoute.value) {
+        router.push(attemptedRoute.value);
+        attemptedRoute.value = '';
+      }
+    }
+  } catch (error) {
+    console.error('Login failed:', error);
   }
 }
 
-function logout() {
-  isLoggedIn.value = false
-  currentUser.value.name = ''
-  currentUser.value.isAdmin = false
-  
-  userStore.logout()
+async function logout() {
+  try {
+    await authService.logout();
+  } catch (error) {
+    console.error('Logout error:', error);
+  } finally {
+    isLoggedIn.value = false;
+    currentUser.value.name = '';
+    currentUser.value.isAdmin = false;
+    router.push('/');
+  }
 }
 </script>
 
@@ -210,11 +218,11 @@ function logout() {
                                     </span>
                                 </a>
                                 <div class="navbar-dropdown is-right" :class="{ 'is-active': isLoginDropdownActive }">
-                                    <a class="navbar-item" @click.stop="login('Admin', true)">Administrator</a>
-                                    <a class="navbar-item" @click.stop="login('Jane Smith')">Jane Smith</a>
-                                    <a class="navbar-item" @click.stop="login('John Doe')">John Doe</a>
-                                    <a class="navbar-item" @click.stop="login('Major Major')">Major Major</a>
-                                    <a class="navbar-item" @click.stop="login('Laura Green')">Laura Green</a>
+                                    <a class="navbar-item" @click.stop="login('Admin', 'password')">Administrator</a>
+                                    <a class="navbar-item" @click.stop="login('Jane Smith', 'password')">Jane Smith</a>
+                                    <a class="navbar-item" @click.stop="login('John Doe', 'password')">John Doe</a>
+                                    <a class="navbar-item" @click.stop="login('Major Major', 'password')">Major Major</a>
+                                    <a class="navbar-item" @click.stop="login('Laura Green', 'password')">Laura Green</a>
                                 </div>
                             </div>
                         </div>

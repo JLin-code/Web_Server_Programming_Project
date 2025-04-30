@@ -1,26 +1,62 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { userStore } from '../stores/userStore';
-import { activityStore } from '../stores/activityStore';
+import { ref, computed, onMounted } from 'vue';
+import { activitiesService } from '../services/activitiesApi';
+import { authService } from '../services/api';
 import AddActivityForm from '../components/AddActivityForm.vue';
 
 const page = 'My Activity';
 const showAddForm = ref(false);
+const activities = ref([]);
+const loading = ref(true);
+const error = ref('');
+const currentUser = ref({ id: null, name: '' });
+
+// Format date helper
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
 
 // Computed property to filter activities based on current user's name
 const filteredActivities = computed(() => {
-  const currentUser = userStore.currentUser();
-  return activityStore.activities.value.filter(activity => activity.user.name === currentUser);
+  return activities.value.filter(activity => activity.user.name === currentUser.value.name);
 });
+
+// Delete activity function
+const deleteActivity = async (id: number) => {
+  try {
+    await activitiesService.delete(id);
+    activities.value = activities.value.filter(a => a.id !== id);
+  } catch (err) {
+    console.error('Failed to delete activity:', err);
+    error.value = 'Failed to delete activity';
+  }
+};
 
 onMounted(async () => {
   try {
-    if (activityStore.activities.value.length === 0) {
-      activityStore.initializeActivities();
-    }
+    loading.value = true;
+    
+    // Get current user
+    const userResponse = await authService.getCurrentUser();
+    currentUser.value = {
+      id: userResponse.user.id,
+      name: `${userResponse.user.first_name} ${userResponse.user.last_name}`
+    };
+    
+    // Get activities
+    const response = await activitiesService.getAll();
+    activities.value = response.items || [];
   } catch (err) {
-    activityStore.error.value = 'Failed to load your activities';
+    error.value = 'Failed to load your activities';
     console.error(err);
+  } finally {
+    loading.value = false;
   }
 });
 
@@ -30,7 +66,6 @@ const toggleAddForm = () => {
 
 const handleActivityAdded = () => {
   showAddForm.value = false;
-  // You could add a success message here if desired
 };
 </script>
 
@@ -43,36 +78,37 @@ const handleActivityAdded = () => {
       </button>
     </div>
     
-    <AddActivityForm 
-      v-if="showAddForm" 
-      @activity-added="handleActivityAdded" 
-      @cancel="showAddForm = false"
-    />
+    <div v-if="showAddForm">
+      <AddActivityForm 
+        @activity-added="handleActivityAdded" 
+        @cancel="toggleAddForm" 
+      />
+    </div>
     
-    <div class="activities-container">
-      <div v-if="activityStore.loading.value" class="loading">
+    <div v-else class="activities-container">
+      <div v-if="loading" class="loading">
         <p>Loading your activities...</p>
       </div>
       
-      <div v-else-if="activityStore.error.value" class="error">
-        <p>{{ activityStore.error.value }}</p>
+      <div v-else-if="error" class="error">
+        <p>{{ error }}</p>
       </div>
       
       <div v-else-if="filteredActivities.length === 0" class="empty-state">
-        <p>No activities found for {{ userStore.currentUser() }}.</p>
+        <p>No activities found for {{ currentUser.name }}.</p>
         <button class="btn" @click="toggleAddForm">Record New Activity</button>
       </div>
       
       <div v-else class="activities-list">
         <div v-for="activity in filteredActivities" :key="activity.id" class="activity-card card">
-          <div class="delete-button" @click="activityStore.deleteActivity(activity.id)">✕</div>
+          <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>
               <h3 class="user-name">
                 {{ activity.user.name }}
               </h3>
-              <span class="activity-date">{{ activityStore.formatDate(activity.date) }}</span>
+              <span class="activity-date">{{ formatDate(activity.date) }}</span>
             </div>
           </div>
           
@@ -99,7 +135,7 @@ const handleActivityAdded = () => {
             </div>
             
             <div class="engagement-actions">
-              <button class="engagement-btn" @click="activityStore.likeActivity(activity.id)">
+              <button class="engagement-btn" @click="activitiesService.like(activity.id)">
                 👍 Like
               </button>
               <button class="engagement-btn">

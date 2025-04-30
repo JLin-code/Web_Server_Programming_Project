@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
-import { activityStore } from '../stores/activityStore';
+import { activitiesService } from '../services/activitiesApi';
+import { authService } from '../services/api';
 
 // Define emits
 const emit = defineEmits(['activityAdded', 'cancel']);
@@ -46,8 +47,8 @@ const removeMetricField = (index: number) => {
   metricValues.value.splice(index, 1);
 };
 
-// Submit form
-const submitForm = () => {
+// Submit form handler
+const submitForm = async () => {
   // Reset errors
   errors.value = {
     title: '',
@@ -55,26 +56,26 @@ const submitForm = () => {
     type: '',
     metrics: ''
   };
-
-  // Basic validation
+  
+  // Validate form
   let isValid = true;
-
+  
   if (!formData.title.trim()) {
     errors.value.title = 'Title is required';
     isValid = false;
   }
-
+  
   if (!formData.description.trim()) {
     errors.value.description = 'Description is required';
     isValid = false;
   }
-
+  
   if (!formData.type) {
     errors.value.type = 'Activity type is required';
     isValid = false;
   }
-
-  // Build metrics object from arrays
+  
+  // Build metrics object from key-value pairs
   const metrics: Record<string, string> = {};
   for (let i = 0; i < metricKeys.value.length; i++) {
     const key = metricKeys.value[i].trim();
@@ -94,16 +95,29 @@ const submitForm = () => {
     return;
   }
 
-  // Submit to store
+  // Get current user
   try {
+    const userResponse = await authService.getCurrentUser();
+    if (!userResponse || !userResponse.user) {
+      console.error('User not logged in');
+      return;
+    }
+    
+    const userId = userResponse.user.id;
     const imageUrl = formData.image.trim() || null;
-    const newActivity = activityStore.addActivity(
-      formData.title,
-      formData.description,
-      formData.type,
+    
+    // Create activity object
+    const newActivity = {
+      user_id: userId,
+      title: formData.title,
+      description: formData.description,
+      type: formData.type,
       metrics,
-      imageUrl
-    );
+      image: imageUrl
+    };
+    
+    // Submit to API
+    const response = await activitiesService.create(newActivity);
     
     // Reset form
     formData.title = '';
@@ -114,7 +128,7 @@ const submitForm = () => {
     metricValues.value = [''];
     
     // Emit event to parent component
-    emit('activityAdded', newActivity);
+    emit('activityAdded', response);
   } catch (error) {
     console.error('Failed to add activity:', error);
   }

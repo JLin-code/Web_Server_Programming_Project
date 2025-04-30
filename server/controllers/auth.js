@@ -118,6 +118,20 @@ router.get('/me', authenticateToken, async (req, res, next) => {
     }
 });
 
+// Get demo users for login
+router.get('/demo-users', (req, res) => {
+    // Demo users data
+    const demoUsers = [
+        { username: 'Admin', displayName: 'Administrator' },
+        { username: 'Jane Smith', displayName: 'Jane Smith' },
+        { username: 'John Doe', displayName: 'John Doe' },
+        { username: 'Major Major', displayName: 'Major Major' },
+        { username: 'Laura Green', displayName: 'Laura Green' }
+    ];
+    
+    res.json({ success: true, users: demoUsers });
+});
+
 // Middleware to authenticate JWT token
 function authenticateToken(req, res, next) {
     // Get token from cookie

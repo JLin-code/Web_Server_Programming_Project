@@ -9,6 +9,7 @@ const isLoginDropdownActive = ref(false);
 const isAdminDropdownActive = ref(false);
 const isLoggedIn = ref(false);
 const attemptedRoute = ref('');
+const demoUsers = ref<Array<{username: string, displayName: string}>>([]);
 const currentUser = ref({
     name: '',
     isAdmin: false
@@ -16,14 +17,21 @@ const currentUser = ref({
 
 onMounted(async () => {
   try {
+    // Check if user is logged in
     const response = await authService.getCurrentUser();
     if (response && response.user) {
       isLoggedIn.value = true;
       currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
       currentUser.value.isAdmin = response.user.role === 'admin';
     }
+    
+    // Fetch demo users
+    const demoUsersResponse = await authService.getDemoUsers();
+    if (demoUsersResponse && demoUsersResponse.users) {
+      demoUsers.value = demoUsersResponse.users;
+    }
   } catch (error) {
-    console.error('Not logged in or session expired');
+    console.error('Error during initialization:', error);
     isLoggedIn.value = false;
   }
 });
@@ -218,11 +226,12 @@ async function logout() {
                                     </span>
                                 </a>
                                 <div class="navbar-dropdown is-right" :class="{ 'is-active': isLoginDropdownActive }">
-                                    <a class="navbar-item" @click.stop="login('Admin', 'password')">Administrator</a>
-                                    <a class="navbar-item" @click.stop="login('Jane Smith', 'password')">Jane Smith</a>
-                                    <a class="navbar-item" @click.stop="login('John Doe', 'password')">John Doe</a>
-                                    <a class="navbar-item" @click.stop="login('Major Major', 'password')">Major Major</a>
-                                    <a class="navbar-item" @click.stop="login('Laura Green', 'password')">Laura Green</a>
+                                    <a v-for="user in demoUsers" 
+                                       :key="user.username" 
+                                       class="navbar-item" 
+                                       @click.stop="login(user.username, 'password')">
+                                      {{ user.displayName }}
+                                    </a>
                                 </div>
                             </div>
                         </div>

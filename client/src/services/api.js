@@ -1,128 +1,124 @@
-const API_URL = 'http://localhost:5000/api';
-
-/**
- * @typedef {Object} DemoUser
- * @property {string} username - Username for login
- * @property {string} displayName - Display name in the dropdown
- */
-
-/**
- * @typedef {Object} DemoUsersResponse
- * @property {boolean} success - Whether the request was successful
- * @property {DemoUser[]} users - Array of demo users
- */
-
-// Define types for our service responses
-/**
- * @typedef {Object} User
- * @property {string} id - User ID
- * @property {string} email - User email
- * @property {string} first_name - User's first name
- * @property {string} last_name - User's last name
- * @property {string} role - User role
- * @property {string} [handle] - Optional user handle
- */
-
-/**
- * @typedef {Object} LoginResponse
- * @property {boolean} success - Whether the login was successful
- * @property {string} message - Login response message
- * @property {User} user - User information
- */
-
-/**
- * Auth service for handling authentication operations
- * @type {{
- *   login: (username: string, password: string) => Promise<LoginResponse>,
- *   logout: () => Promise<{success: boolean, message: string}>,
- *   getCurrentUser: () => Promise<{user: User | null}>,
- *   register: (userData: any) => Promise<any>,
- *   getUsers: () => Promise<DemoUsersResponse>
- * }}
- */
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+// Helper function for making fetch requests
+async function fetchApi(endpoint, options = {}) {
+    const url = `${API_URL}${endpoint}`;
+    const defaultOptions = {
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        credentials: 'include' // Important for cookies/sessions
+    };
+    const response = await fetch(url, { ...defaultOptions, ...options });
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(error.message || `API error: ${response.status}`);
+    }
+    return response.json();
+}
+// Authentication API
 export const authService = {
-  async login(username, password) {
-    const response = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username, password }),
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to login');
+    login: async (username, password) => {
+        return fetchApi('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+    },
+    logout: async () => {
+        return fetchApi('/auth/logout', { method: 'POST' });
+    },
+    getCurrentUser: async () => {
+        return fetchApi('/auth/me');
+    },
+    register: async (userData) => {
+        return fetchApi('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify(userData)
+        });
+    },
+    getUsers: async () => {
+        try {
+            return await fetchApi('/auth/demo-users');
+        }
+        catch (error) {
+            console.error('Error in getUsers:', error);
+            // Return a fallback if server is unreachable
+            return {
+                success: false,
+                users: [{ username: 'Admin', displayName: 'Admin (Fallback)' }]
+            };
+        }
     }
-
-    return response.json();
-  },
-
-  async logout() {
-    const response = await fetch(`${API_URL}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to logout');
-    }
-
-    return response.json();
-  },
-
-  async getCurrentUser() {
-    const response = await fetch(`${API_URL}/auth/me`, {
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get current user');
-    }
-
-    return response.json();
-  },
-
-  async register(userData) {
-    const response = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to register');
-    }
-
-    return response.json();
-  },
-
-  /**
-   * Fetches demo users for the login dropdown
-   * @returns {Promise<DemoUsersResponse>} List of demo users
-   */
-  async getUsers() {
-    try {
-      const response = await fetch(`${API_URL}/auth/demo-users`, {
-        credentials: 'include',
-      });
-      
-      if (!response.ok) {
-        console.error('Demo users fetch failed:', response.status);
-        throw new Error('Failed to fetch demo users');
-      }
-      
-      return response.json();
-    } catch (error) {
-      console.error('Error in getUsers:', error);
-      // Return a fallback if server is unreachable
-      return { 
-        success: false, 
-        users: [{ username: 'Admin', displayName: 'Admin (Fallback)' }] 
-      };
-    }
-  }
 };
+// Users API
+export const userService = {
+    getAll: async () => {
+        return fetchApi('/users');
+    },
+    getById: async (id) => {
+        return fetchApi(`/users/${id}`);
+    },
+    create: async (userData) => {
+        return fetchApi('/users', {
+            method: 'POST',
+            body: JSON.stringify(userData)
+        });
+    },
+    update: async (id, userData) => {
+        return fetchApi(`/users/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(userData)
+        });
+    },
+    delete: async (id) => {
+        return fetchApi(`/users/${id}`, { method: 'DELETE' });
+    },
+    // Add getCurrentUser method that uses the auth endpoint
+    getCurrentUser: async () => {
+        return fetchApi('/auth/me');
+    }
+};
+// Products API
+export const productService = {
+    getAll: async () => {
+        return fetchApi('/products');
+    },
+    getById: async (id) => {
+        return fetchApi(`/products/${id}`);
+    },
+    create: async (productData) => {
+        return fetchApi('/products', {
+            method: 'POST',
+            body: JSON.stringify(productData)
+        });
+    },
+    update: async (id, productData) => {
+        return fetchApi(`/products/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(productData)
+        });
+    },
+    delete: async (id) => {
+        return fetchApi(`/products/${id}`, { method: 'DELETE' });
+    }
+};
+// Friends API
+export const friendService = {
+    getFriends: async (userId) => {
+        return fetchApi(`/friends/${userId}`);
+    },
+    addFriend: async (userId, friendId) => {
+        return fetchApi(`/friends/${userId}/add/${friendId}`, { method: 'POST' });
+    },
+    removeFriend: async (userId, friendId) => {
+        return fetchApi(`/friends/${userId}/remove/${friendId}`, { method: 'DELETE' });
+    }
+};
+// Global error handler for fetch
+window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason instanceof Error && event.reason.message.includes('API error: 401')) {
+        console.error('Authentication error');
+        // You can add logic to redirect to login page here
+    }
+});
+export default { authService, userService, productService, friendService };
+//# sourceMappingURL=api.js.map

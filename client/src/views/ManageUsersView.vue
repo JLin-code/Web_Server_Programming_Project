@@ -3,7 +3,16 @@ import { ref, onMounted } from 'vue';
 import { userService } from '../services/api';
 
 const page = ref('Manage Users');
-const users = ref([]);
+interface User {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  handle: string;
+  isAdmin: boolean;
+}
+
+const users = ref<User[]>([]);
 const loading = ref(true);
 const error = ref('');
 

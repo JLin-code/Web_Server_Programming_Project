@@ -1,30 +1,7 @@
 import { ref } from 'vue';
-import { userStore } from './userStore';
+import { userStore } from '../stores/userStore';
 import { activitiesService } from '../services/activitiesApi';
-
-// Keep the interfaces - they're just type definitions
-interface User {
-  id: number;
-  name: string;
-  avatar: string;
-}
-
-interface Metrics {
-  [key: string]: string | number;
-}
-
-interface Activity {
-  id: number;
-  user: User;
-  type: string;
-  title: string;
-  description: string;
-  date: string;
-  metrics: Metrics;
-  likes: number;
-  comments: number;
-  image: string | null;
-}
+import type { Activity } from '../types';
 
 // Create a reactive array to store activities
 const activities = ref<Activity[]>([]);
@@ -47,7 +24,7 @@ const initializeActivities = async () => {
 };
 
 // Keep the actions but make them use the API
-const deleteActivity = async (id: number) => {
+const deleteActivity = async (id: string | number) => {
   try {
     await activitiesService.delete(id);
     activities.value = activities.value.filter(a => a.id !== id);
@@ -57,16 +34,16 @@ const deleteActivity = async (id: number) => {
   }
 };
 
-const likeActivity = async (id: number) => {
+const likeActivity = async (id: string | number) => {
   const activity = activities.value.find(a => a.id === id);
-  if (activity) {
-    try {
-      await activitiesService.update(id, { likes: activity.likes + 1 });
-      activity.likes++;
-    } catch (err) {
-      console.error('Failed to like activity:', err);
-      error.value = 'Failed to like activity';
-    }
+  if (!activity) return;
+  
+  try {
+    await activitiesService.update(id, { likes: activity.likes + 1 });
+    activity.likes++;
+  } catch (err) {
+    console.error('Failed to like activity:', err);
+    error.value = 'Failed to like activity';
   }
 };
 
@@ -86,17 +63,19 @@ const addActivity = async (
   title: string,
   description: string,
   type: string,
-  metrics: Metrics,
-  image: string | null = null
+  metrics: Record<string, string | number>,
+  image?: string
 ) => {
   try {
-    const userId = userStore.userId;
-    if (!userId) {
+    const userResponse = await userStore.currentUser;
+    if (!userResponse) {
       error.value = 'User not logged in';
       return null;
     }
     
-    const newActivity = {
+    const userId = userResponse.value?.id;
+    
+    const newActivity: Partial<Activity> = {
       user_id: userId,
       title,
       description,

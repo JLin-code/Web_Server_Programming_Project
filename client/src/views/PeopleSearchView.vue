@@ -5,7 +5,14 @@ import { userService, friendService } from '../services/api';
 const page = 'People Search';
 
 // Users state
-const users = ref([]);
+const users = ref<{ 
+  id: number; 
+  firstName: string; 
+  lastName: string; 
+  email: string; 
+  handle: string; 
+  isFriend: boolean; 
+}[]>([]);
 const loading = ref(true);
 const error = ref('');
 const searchQuery = ref('');
@@ -25,8 +32,11 @@ onMounted(async () => {
     const response = await userService.getAll();
     
     // Get friends
-    const friendsResponse = await friendService.getFriends(currentUserId.value);
-    const friendIds = new Set(friendsResponse.items.map((friend: any) => friend.id));
+    let friendIds = new Set();
+    if (currentUserId.value !== null) {
+      const friendsResponse = await friendService.getFriends(currentUserId.value);
+      friendIds = new Set(friendsResponse.items.map((friend: any) => friend.id));
+    }
     
     // Mark friends in the user list
     users.value = response.items.map((user: any) => ({

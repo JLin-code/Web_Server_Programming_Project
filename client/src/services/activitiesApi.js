@@ -91,4 +91,11 @@ export const activitiesService = {
     
     return await response.json();
   },
+  
+  // Add a convenience method for liking activities
+  async like(id) {
+    // Get the activity first to increment its current likes count
+    const activity = await this.get(id);
+    return this.update(id, { likes: activity.likes + 1 });
+  }
 };

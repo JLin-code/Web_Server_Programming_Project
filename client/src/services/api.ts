@@ -84,6 +84,11 @@ export const userService = {
   
   delete: async (id: string | number) => {
     return fetchApi(`/users/${id}`, { method: 'DELETE' });
+  },
+  
+  // Add getCurrentUser method that uses the auth endpoint
+  getCurrentUser: async () => {
+    return fetchApi('/auth/me');
   }
 };
 

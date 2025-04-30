@@ -3,10 +3,11 @@ import { ref, computed, onMounted } from 'vue';
 import { activitiesService } from '../services/activitiesApi';
 import { authService } from '../services/api';
 import AddActivityForm from '../components/AddActivityForm.vue';
+import type { Activity } from '../types';
 
 const page = 'My Activity';
 const showAddForm = ref(false);
-const activities = ref([]);
+const activities = ref<Activity[]>([]); // Add proper type annotation
 const loading = ref(true);
 const error = ref('');
 const currentUser = ref({ id: null, name: '' });
@@ -35,6 +36,20 @@ const deleteActivity = async (id: number) => {
   } catch (err) {
     console.error('Failed to delete activity:', err);
     error.value = 'Failed to delete activity';
+  }
+};
+
+// Add a like function to handle activity likes
+const likeActivity = async (id: number) => {
+  try {
+    const activity = activities.value.find(a => a.id === id);
+    if (!activity) return;
+    
+    await activitiesService.update(id, { likes: activity.likes + 1 });
+    activity.likes++;
+  } catch (err) {
+    console.error('Failed to like activity:', err);
+    error.value = 'Failed to like activity';
   }
 };
 
@@ -101,7 +116,7 @@ const handleActivityAdded = () => {
       
       <div v-else class="activities-list">
         <div v-for="activity in filteredActivities" :key="activity.id" class="activity-card card">
-          <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
+          <div class="delete-button" @click="deleteActivity(Number(activity.id))">✕</div>
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>
@@ -135,7 +150,7 @@ const handleActivityAdded = () => {
             </div>
             
             <div class="engagement-actions">
-              <button class="engagement-btn" @click="activitiesService.like(activity.id)">
+              <button class="engagement-btn" @click="likeActivity(Number(activity.id))">
                 👍 Like
               </button>
               <button class="engagement-btn">

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { activitiesService } from '../services/activitiesApi';
+import type { Activity } from '../types';
 
 const page = 'Friends Activity';
-const activities = ref([]);
+const activities = ref<Activity[]>([]); // Add proper type annotation
 const loading = ref(true);
 const error = ref('');
 
@@ -64,7 +65,7 @@ onMounted(async () => {
       
       <div v-else class="activities-list">
         <div v-for="activity in activities" :key="activity.id" class="activity-card card">
-          <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
+          <div class="delete-button" @click="deleteActivity(Number(activity.id))">✕</div>
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>

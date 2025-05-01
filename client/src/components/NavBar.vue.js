@@ -314,6 +314,23 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)(
     ...{ class: "fas fa-search" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.a, __VLS_intrinsicElements.a)({
+  ...{ onClick: (...[$event]) => {
+    __VLS_ctx.checkLoginBeforeNav('/exercise-types') && __VLS_ctx.router.push('/exercise-types');
+  } },
+  ...{ class: "navbar-item" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+  ...{ class: "icon-text" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+  ...{ class: "icon" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({
+  ...{ class: "fas fa-dumbbell" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
+("Exercise Types");
 if (__VLS_ctx.isLoggedIn && __VLS_ctx.currentUser.isAdmin) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "navbar-item has-dropdown" },
@@ -390,9 +407,7 @@ if (__VLS_ctx.isLoggedIn) {
         ...{ class: "button is-primary" },
     }, ...__VLS_functionalComponentArgsRest(__VLS_9));
     __VLS_11.slots.default;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({});
-    (__VLS_ctx.currentUser.name);
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_asFunctionalElement(__VLS_intrinsicElements.span)({
         ...{ class: "icon" },
     });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.i, __VLS_intrinsicElements.i)({

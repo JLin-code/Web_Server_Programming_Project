@@ -337,6 +337,48 @@ const dataController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  // Get statistics for a specific user
+  async getUserStatistics(req, res, next) {
+    try {
+      const { userId } = req.params;
+      
+      const { data, error } = await supabase
+        .rpc('get_user_statistics', { user_id_param: parseInt(userId) });
+      
+      if (error) {
+        console.error('Error fetching user statistics:', error);
+        throw new CustomError('Failed to fetch user statistics', statusCodes.INTERNAL_SERVER_ERROR);
+      }
+      
+      res.json({
+        success: true,
+        statistics: data
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+  
+  // Get global platform statistics
+  async getGlobalStatistics(req, res, next) {
+    try {
+      const { data, error } = await supabase
+        .rpc('get_global_statistics');
+      
+      if (error) {
+        console.error('Error fetching global statistics:', error);
+        throw new CustomError('Failed to fetch global statistics', statusCodes.INTERNAL_SERVER_ERROR);
+      }
+      
+      res.json({
+        success: true,
+        statistics: data
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 };
 

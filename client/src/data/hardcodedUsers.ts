@@ -9,35 +9,35 @@ export interface DemoUser {
 export const demoUsers: DemoUser[] = [
   {
     username: 'john.doe@example.com',
-    displayName: 'John Doe (User)',
+    displayName: 'John Dwefoe (User)',
     firstName: 'John',
-    lastName: 'Doe',
+    lastName: 'Doeewf',
     role: 'user'
   },
   {
     username: 'jane.smith@example.com',
-    displayName: 'Jane Smith (User)',
+    displayName: 'Jane Smifwqeth (User)',
     firstName: 'Jane',
     lastName: 'Smith',
     role: 'user'
   },
   {
     username: 'admin@example.com',
-    displayName: 'Admin User (Admin)',
+    displayName: 'Admin Uqwfeser (Admin)',
     firstName: 'Admin',
     lastName: 'User',
     role: 'admin'
   },
   {
     username: 'emily.johnson@example.com',
-    displayName: 'Emily Johnson (User)',
+    displayName: 'Emily Johnsfqweon (User)',
     firstName: 'Emily',
     lastName: 'Johnson',
     role: 'user'
   },
   {
     username: 'david.wilson@example.com',
-    displayName: 'David Wilson (User)',
+    displayName: 'David Wilsfewqon (User)',
     firstName: 'David',
     lastName: 'Wilson',
     role: 'user'

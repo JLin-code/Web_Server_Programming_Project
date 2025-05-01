@@ -25,6 +25,9 @@ export const supabase = createClient(
   }
 )
 
+// Also export as default for flexibility
+export default supabase;
+
 // Test connection
 async function testSupabaseConnection() {
   try {

@@ -2,6 +2,9 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/api';
+import { RouterLink } from 'vue-router';
+import supabase from '../services/supabase';
+import { demoUsers as fallbackUsers } from '../data/hardcodedUsers';
 
 const router = useRouter();
 const isActive = ref(false);
@@ -22,24 +25,124 @@ function toggleBurger() {
 
 onMounted(async () => {
   try {
-    // Check if user is logged in
-    const response = await authService.getCurrentUser();
+    // First check Supabase session directly
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session) {
+      console.log('Supabase session found:', session.user.email);
+      // Get user details from Supabase database
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('first_name, last_name, role')
+        .eq('email', session.user.email)
+        .single();
+        
+      if (userError) {
+        console.error('Error fetching user data from Supabase:', userError);
+        // Fall back to API
+        checkApiUser();
+      } else if (userData) {
+        // Set user from Supabase data
+        isLoggedIn.value = true;
+        currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
+        currentUser.value.isAdmin = userData.role === 'admin';
+        console.log('User data loaded from Supabase:', currentUser.value);
+      } else {
+        // Fall back to API if no user data found in Supabase
+        checkApiUser();
+      }
+    } else {
+      // No Supabase session, try API
+      checkApiUser();
+    }
+    
+    // Load demo users from Supabase
+    await loadDemoUsers();
+    
+  } catch (error) {
+    console.error('Error during initialization:', error);
+    isLoggedIn.value = false;
+    // Use imported fallback users if everything fails
+    demoUsers.value = fallbackUsers.map(user => ({
+      username: user.username,
+      displayName: user.displayName
+    }));
+  }
+});
+
+async function checkApiUser() {
+  try {
+    // Check if user is logged in via API as fallback
+    const response = await authService.getCurrentUser().catch(err => {
+      console.warn('Error fetching current user from API (continuing anyway):', err);
+      return null;
+    });
+    
     if (response && response.user) {
       isLoggedIn.value = true;
       currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
       currentUser.value.isAdmin = response.user.role === 'admin';
     }
-    
-    // Fetch demo users
-    const demoUsersResponse = await authService.getUsers();
-    if (demoUsersResponse && demoUsersResponse.users) {
-      demoUsers.value = demoUsersResponse.users;
-    }
   } catch (error) {
-    console.error('Error during initialization:', error);
+    console.warn('API user check failed, using no user state:', error);
     isLoggedIn.value = false;
   }
-});
+}
+
+async function loadDemoUsers() {
+  try {
+    // First try direct Supabase query for demo users
+    const { data: supabaseUsers, error: supabaseError } = await supabase
+      .from('users')
+      .select('email, first_name, last_name, role')
+      .limit(5);
+    
+    if (supabaseError) {
+      console.warn('Failed to load users from Supabase directly:', supabaseError);
+      fallbackLoadDemoUsers();
+      return;
+    }
+    
+    if (supabaseUsers && supabaseUsers.length > 0) {
+      demoUsers.value = supabaseUsers.map((user: { email: string; first_name: string; last_name: string; role: string }) => ({
+        username: user.email,
+        displayName: `${user.first_name} ${user.last_name} (${user.role === 'admin' ? 'Admin' : 'User'})`
+      }));
+      console.log('Loaded demo users directly from Supabase');
+      return;
+    }
+    
+    // If we got no users, try API
+    fallbackLoadDemoUsers();
+  } catch (error) {
+    console.error('Error loading demo users from Supabase:', error);
+    fallbackLoadDemoUsers();
+  }
+}
+
+async function fallbackLoadDemoUsers() {
+  try {
+    // Try API for demo users
+    const demoUsersResponse = await authService.getUsers();
+    if (demoUsersResponse && demoUsersResponse.users && demoUsersResponse.users.length > 0) {
+      demoUsers.value = demoUsersResponse.users;
+      console.log('Loaded demo users via API');
+    } else {
+      // Use imported fallback users if API returns empty
+      demoUsers.value = fallbackUsers.map(user => ({
+        username: user.username,
+        displayName: user.displayName
+      }));
+      console.log('Using hardcoded fallback users (API returned empty)');
+    }
+  } catch (demoError) {
+    console.error('Failed to load demo users from API, using fallbacks:', demoError);
+    demoUsers.value = fallbackUsers.map(user => ({
+      username: user.username,
+      displayName: user.displayName
+    }));
+  }
+}
 
 // Toggles dropdown while ensuring only one is open at a time
 function toggleDropdown(dropdown: string) {
@@ -68,8 +171,64 @@ function checkLoginBeforeNav(route: string) {
 
 async function login(username: string, password: string) {
   try {
+    console.log('Attempting login with Supabase for:', username);
+    
+    // Try direct Supabase authentication first
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: username,
+      password: password
+    });
+    
+    if (authError) {
+      console.warn('Supabase auth failed, trying API:', authError.message);
+      // Fall back to API login
+      return loginViaApi(username, password);
+    }
+    
+    if (authData.user) {
+      console.log('Supabase login successful:', authData.user.email);
+      
+      // Get user details from the database
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('first_name, last_name, role')
+        .eq('email', authData.user.email)
+        .single();
+        
+      if (userError || !userData) {
+        console.warn('Error fetching user details after Supabase auth:', userError);
+        return loginViaApi(username, password);
+      }
+      
+      // Update UI with user info
+      currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
+      currentUser.value.isAdmin = userData.role === 'admin';
+      isLoggedIn.value = true;
+      isLoginDropdownActive.value = false;
+      
+      if (attemptedRoute.value) {
+        router.push(attemptedRoute.value);
+        attemptedRoute.value = '';
+      }
+      
+      return true;
+    } else {
+      // Fallback to API login if no user returned
+      return loginViaApi(username, password);
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    return loginViaApi(username, password);
+  }
+}
+
+async function loginViaApi(username: string, password: string) {
+  try {
+    // Attempt server login
     const response = await authService.login(username, password);
-    if (response.success) {
+    
+    if (response && response.success) {
+      // If server login succeeds
       currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
       currentUser.value.isAdmin = response.user.role === 'admin';
       isLoggedIn.value = true;
@@ -79,18 +238,66 @@ async function login(username: string, password: string) {
         router.push(attemptedRoute.value);
         attemptedRoute.value = '';
       }
+      return true;
+    } else {
+      console.error('API login response indicates failure');
+      fallbackLogin(username);
+      return false;
     }
   } catch (error) {
-    console.error('Login failed:', error);
+    console.error('API login failed:', error);
+    fallbackLogin(username);
+    return false;
+  }
+}
+
+// Fallback login for when API fails
+function fallbackLogin(username: string) {
+  // If API fails, perform client-side "login" with hardcoded user
+  const hardcodedUser = fallbackUsers.find(user => user.username === username);
+  if (hardcodedUser && username) {
+    console.log('Falling back to client-side login');
+    const firstName = hardcodedUser.firstName || '';
+    const lastName = hardcodedUser.lastName || '';
+    const isAdmin = hardcodedUser.role === 'admin';
+    
+    currentUser.value.name = `${firstName} ${lastName}`;
+    currentUser.value.isAdmin = isAdmin;
+    isLoggedIn.value = true;
+    isLoginDropdownActive.value = false;
+    
+    if (attemptedRoute.value) {
+      router.push(attemptedRoute.value);
+      attemptedRoute.value = '';
+    }
   }
 }
 
 async function logout() {
   try {
-    await authService.logout();
+    console.log('Attempting Supabase logout');
+    // First try direct Supabase logout
+    const { error: supabaseError } = await supabase.auth.signOut();
+    
+    if (supabaseError) {
+      console.warn('Supabase logout error:', supabaseError);
+      // Continue to API logout even if Supabase fails
+    } else {
+      console.log('Supabase logout successful');
+    }
+    
+    // Also try API logout for consistency
+    try {
+      await authService.logout();
+      console.log('API logout successful');
+    } catch (apiError) {
+      console.error('API logout error:', apiError);
+      // Continue even if API logout fails
+    }
   } catch (error) {
     console.error('Logout error:', error);
   } finally {
+    // Reset application state regardless of logout API success
     isLoggedIn.value = false;
     currentUser.value.name = '';
     currentUser.value.isAdmin = false;
@@ -100,54 +307,25 @@ async function logout() {
 </script>
 
 <template>
-    <nav class="navbar is-info" role="navigation" aria-label="main navigation" @click.self="closeDropdowns">
-        <div class="container">
-            <div class="navbar-brand">
-                <a class="navbar-item" @click="router.push('/')">
-                    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="30" />
-                </a>
-
-                <!-- Always visible on desktop -->
-                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/') && router.push('/my-activity')">
-                    <span class="icon-text">
-                        <span class="icon">
-                            <i class="fas fa-running"></i>
-                        </span>
-                        <span>My Activity</span>
-                    </span>
-                </a>
-                
-                <a class="navbar-item is-hidden-mobile" @click="router.push('/')">
-                    <span class="icon-text">
-                        <span class="icon">
-                            <i class="fas fa-chart-bar"></i>
-                        </span>
-                        <span>Statistics</span>
-                    </span>
-                </a>
-                
-                <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/friends') && router.push('/friend-activity')">
-                    <span class="icon-text">
-                        <span class="icon">
-                            <i class="fas fa-users"></i>
-                        </span>
-                        <span>Friends Activity</span>
-                    </span>
-                </a>
-
-                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false"
-                   :class="{ 'is-active': isActive }" @click.stop="toggleBurger">
-                    <span aria-hidden="true"></span>
-                    <span aria-hidden="true"></span>
-                    <span aria-hidden="true"></span>
-                    <span aria-hidden="true"></span>
-                </a>
+    <div>
+        <!-- Safe fallback UI in case of catastrophic errors -->
+        <div v-if="false" class="emergency-fallback">
+            <div class="container has-text-centered">
+                <h1 class="title">Navigation Unavailable</h1>
+                <p>Please try refreshing the page or contact support.</p>
             </div>
+        </div>
 
-            <div class="navbar-menu" :class="{ 'is-active': isActive }">
-                <div class="navbar-start">
-                    <!-- Mobile-only duplicates -->
-                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/') && router.push('/my-activity')">
+        <!-- Regular navigation -->
+        <nav class="navbar is-info" role="navigation" aria-label="main navigation" @click.self="closeDropdowns">
+            <div class="container">
+                <div class="navbar-brand">
+                    <a class="navbar-item" @click="router.push('/')">
+                        <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="30" />
+                    </a>
+
+                    <!-- Always visible on desktop -->
+                    <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/') && router.push('/my-activity')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-running"></i>
@@ -156,7 +334,7 @@ async function logout() {
                         </span>
                     </a>
                     
-                    <a class="navbar-item is-hidden-tablet" @click="router.push('/')">
+                    <a class="navbar-item is-hidden-mobile" @click="router.push('/')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-chart-bar"></i>
@@ -165,7 +343,7 @@ async function logout() {
                         </span>
                     </a>
                     
-                    <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/friends') && router.push('/friends')">
+                    <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/friends') && router.push('/friend-activity')">
                         <span class="icon-text">
                             <span class="icon">
                                 <i class="fas fa-users"></i>
@@ -173,78 +351,118 @@ async function logout() {
                             <span>Friends Activity</span>
                         </span>
                     </a>
-                    
-                    <!-- Items in burger on mobile -->
-                    <a class="navbar-item" @click="checkLoginBeforeNav('/search') && router.push('/people-search')">
-                        <span class="icon-text">
-                            <span class="icon">
-                                <i class="fas fa-search"></i>
-                            </span>
-                            <span>People Search</span>
-                        </span>
+
+                    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false"
+                       :class="{ 'is-active': isActive }" @click.stop="toggleBurger">
+                        <span aria-hidden="true"></span>
+                        <span aria-hidden="true"></span>
+                        <span aria-hidden="true"></span>
+                        <span aria-hidden="true"></span>
                     </a>
-
-                    <div class="navbar-item has-dropdown" v-if="isLoggedIn && currentUser.isAdmin"
-                         :class="{ 'is-active': isAdminDropdownActive }">
-                        <a class="navbar-link" @click.stop="toggleDropdown('admin')">
-                                <span>Admin</span>
-                        </a>
-
-                        <div class="navbar-dropdown">
-                            <RouterLink to="/manage-users" class="navbar-item">
-                                    <span>Manage Users</span>
-                            </RouterLink>
-                        </div>
-                    </div>
                 </div>
 
-                <div class="navbar-end">
-                    <div class="navbar-item">
-                        <div class="buttons">
-                            <RouterLink v-if="!isLoggedIn" to="/signup" class="button is-primary">
-                                <span>Sign up</span>
+                <div class="navbar-menu" :class="{ 'is-active': isActive }">
+                    <div class="navbar-start">
+                        <!-- Mobile-only duplicates -->
+                        <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/') && router.push('/my-activity')">
+                            <span class="icon-text">
                                 <span class="icon">
-                                    <i class="fas fa-user-plus"></i>
+                                    <i class="fas fa-running"></i>
                                 </span>
-                            </RouterLink>
-                            
-                            <RouterLink v-if="isLoggedIn" to="/profile" class="button is-primary">
-                                <span>Profile ({{ currentUser.name }})</span>
+                                <span>My Activity</span>
+                            </span>
+                        </a>
+                        
+                        <a class="navbar-item is-hidden-tablet" @click="router.push('/')">
+                            <span class="icon-text">
                                 <span class="icon">
-                                    <i class="fas fa-user"></i>
+                                    <i class="fas fa-chart-bar"></i>
                                 </span>
-                            </RouterLink>
-                            
-                            <a v-if="isLoggedIn" @click="logout" class="button is-light">
-                                <span>Logout</span>
+                                <span>Statistics</span>
+                            </span>
+                        </a>
+                        
+                        <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/friends') && router.push('/friends')">
+                            <span class="icon-text">
                                 <span class="icon">
-                                    <i class="fas fa-sign-out-alt"></i>
+                                    <i class="fas fa-users"></i>
                                 </span>
+                                <span>Friends Activity</span>
+                            </span>
+                        </a>
+                        
+                        <!-- Items in burger on mobile -->
+                        <a class="navbar-item" @click="checkLoginBeforeNav('/search') && router.push('/people-search')">
+                            <span class="icon-text">
+                                <span class="icon">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <span>People Search</span>
+                            </span>
+                        </a>
+
+                        <div class="navbar-item has-dropdown" v-if="isLoggedIn && currentUser.isAdmin"
+                             :class="{ 'is-active': isAdminDropdownActive }">
+                            <a class="navbar-link" @click.stop="toggleDropdown('admin')">
+                                    <span>Admin</span>
                             </a>
-                            
-                            <!-- Custom implementation for proper dropdown behavior -->
-                            <div v-if="!isLoggedIn" class="login-dropdown-container">
-                                <a class="button is-light" @click.stop="toggleDropdown('login')">
-                                    <span>Log in {{ attemptedRoute ? '(to access ' + attemptedRoute + ')' : '' }}</span>
+
+                            <div class="navbar-dropdown">
+                                <RouterLink to="/manage-users" class="navbar-item">
+                                        <span>Manage Users</span>
+                                </RouterLink>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="navbar-end">
+                        <div class="navbar-item">
+                            <div class="buttons">
+                                <RouterLink v-if="!isLoggedIn" to="/signup" class="button is-primary">
+                                    <span>Sign up</span>
                                     <span class="icon">
-                                        <i class="fas fa-sign-in-alt"></i>
+                                        <i class="fas fa-user-plus"></i>
+                                    </span>
+                                </RouterLink>
+                                
+                                <RouterLink v-if="isLoggedIn" to="/profile" class="button is-primary">
+                                    <span>Profile ({{ currentUser.name }})</span>
+                                    <span class="icon">
+                                        <i class="fas fa-user"></i>
+                                    </span>
+                                </RouterLink>
+                                
+                                <a v-if="isLoggedIn" @click="logout" class="button is-light">
+                                    <span>Logout</span>
+                                    <span class="icon">
+                                        <i class="fas fa-sign-out-alt"></i>
                                     </span>
                                 </a>
-                                <div class="navbar-dropdown is-right" :class="{ 'is-active': isLoginDropdownActive }">
-                                    <a v-for="user in demoUsers" 
-                                       :key="user.username" 
-                                       class="navbar-item" 
-                                       @click.stop="login(user.username, 'password')">
-                                      {{ user.displayName }}
+                                
+                                <!-- Custom implementation for proper dropdown behavior -->
+                                <div v-if="!isLoggedIn" class="login-dropdown-container">
+                                    <a class="button is-light" @click.stop="toggleDropdown('login')">
+                                        <span>Log in {{ attemptedRoute ? '(to access ' + attemptedRoute + ')' : '' }}</span>
+                                        <span class="icon">
+                                            <i class="fas fa-sign-in-alt"></i>
+                                        </span>
                                     </a>
+                                    <div class="navbar-dropdown is-right" :class="{ 'is-active': isLoginDropdownActive }">
+                                        <a v-for="user in demoUsers" 
+                                           :key="user.username" 
+                                           class="navbar-item" 
+                                           @click.stop="login(user.username, 'password')">
+                                          {{ user.displayName }}
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </nav>
+        </nav>
+    </div>
 </template>
 
 <style scoped>
@@ -298,6 +516,13 @@ async function logout() {
     align-items: center;
 }
 
+.emergency-fallback {
+    background-color: #3273dc;
+    padding: 1rem;
+    color: white;
+    margin-bottom: 1rem;
+}
+
 @media screen and (min-width: 1024px) {
     .navbar-brand .navbar-item {
         padding-right: 0.75rem;
@@ -330,13 +555,13 @@ async function logout() {
     position: absolute;
     right: 0;
     top: 100%;
-    background-color: rgb(3, 255, 150);
+    background-color: white;
     border-radius: 4px;
     box-shadow: 0 8px 8px rgba(10, 10, 10, 0.1);
     padding-bottom: 0.5rem;
     padding-top: 0.5rem;
     min-width: 12rem;
-    z-index: 20;
+    z-index: 40;
 }
 
 .login-dropdown-container .navbar-dropdown.is-active {

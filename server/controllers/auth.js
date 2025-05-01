@@ -182,29 +182,81 @@ router.get('/me', authenticateToken, async (req, res, next) => {
 // Get demo users for login
 router.get('/demo-users', async (req, res, next) => {
     try {
-        // Try to get actual users from database
-        const usersResult = await userModel.getAll();
+        console.log('Fetching demo users for login dropdown...');
         
-        // Format users for dropdown
-        const demoUsers = usersResult.items.map(user => ({
-            username: user.email,
-            displayName: `${user.first_name} ${user.last_name} (${user.role === 'admin' ? 'Admin' : 'User'})`
-        })).slice(0, 5); // Limit to 5 users for dropdown
-        
-        res.json({ success: true, users: demoUsers });
-    } catch (err) {
-        // If database fetch fails, fall back to hardcoded users
-        console.error('Error fetching users for dropdown:', err);
-        
-        const demoUsers = [
+        // Always provide hardcoded fallback users regardless of DB success
+        const fallbackUsers = [
             { username: 'john.doe@example.com', displayName: 'John Doe (User)' },
             { username: 'jane.smith@example.com', displayName: 'Jane Smith (User)' },
             { username: 'michael.brown@example.com', displayName: 'Michael Brown (Admin)' },
             { username: 'emily.johnson@example.com', displayName: 'Emily Johnson (User)' },
             { username: 'david.wilson@example.com', displayName: 'David Wilson (User)' }
         ];
-        
-        res.json({ success: true, users: demoUsers });
+
+        // Try to get actual users from database
+        try {
+            const usersResult = await userModel.getAll();
+            
+            console.log(`Database query result:`, JSON.stringify(usersResult || {}).substring(0, 200) + '...');
+            
+            if (!usersResult || !usersResult.items || usersResult.items.length === 0) {
+                console.warn('No users found in database, using fallback users');
+                return res.json({ 
+                    success: true, 
+                    users: fallbackUsers,
+                    source: 'fallback',
+                    message: 'Using hardcoded users (no users in database)'
+                });
+            }
+            
+            console.log(`Found ${usersResult.items.length} users in database`);
+            
+            // Format users for dropdown
+            const demoUsers = usersResult.items
+                .filter(user => user && user.email && user.first_name && user.last_name)
+                .map(user => ({
+                    username: user.email,
+                    displayName: `${user.first_name} ${user.last_name} (${user.role === 'admin' ? 'Admin' : 'User'})`
+                }))
+                .slice(0, 5); // Limit to 5 users for dropdown
+            
+            if (demoUsers.length > 0) {
+                console.log('Returning database users:', demoUsers.length);
+                return res.json({ 
+                    success: true, 
+                    users: demoUsers,
+                    source: 'database',
+                    message: 'Using database users'
+                });
+            } else {
+                console.warn('No valid users found in database, using fallback');
+                return res.json({ 
+                    success: true, 
+                    users: fallbackUsers,
+                    source: 'fallback',
+                    message: 'Using hardcoded users (no valid users in database)'
+                });
+            }
+        } catch (dbError) {
+            console.error('Database error when fetching users:', dbError);
+            return res.json({ 
+                success: true, 
+                users: fallbackUsers,
+                source: 'fallback',
+                message: 'Using hardcoded users (database error)'
+            });
+        }
+    } catch (err) {
+        console.error('Unexpected error in demo-users endpoint:', err);
+        return res.json({ 
+            success: true, 
+            users: [
+                { username: 'john.doe@example.com', displayName: 'John Doe (Emergency Fallback)' },
+                { username: 'admin@example.com', displayName: 'Admin User (Emergency Fallback)' }
+            ],
+            source: 'emergency-fallback',
+            message: 'Using emergency fallback users due to unexpected error'
+        });
     }
 });
 

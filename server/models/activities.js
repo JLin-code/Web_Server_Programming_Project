@@ -4,186 +4,198 @@ const { connect } = require('./supabase');
 const TABLE_NAME = 'activities';
 
 async function getAll() {
-    const { data, error, count } = await connect()
-        .from(TABLE_NAME)
-        .select(`
-            *,
-            users!user_id (id, first_name, last_name, email, image)
-        `, { count: 'exact' });
-    
-    if (error) {
-        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    const supabase = connect();
+    try {
+        console.log(`Fetching all activities from ${TABLE_NAME} table`);
+        
+        // Join with users table to get user information
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select(`
+                *,
+                user:user_id (
+                    id, first_name, last_name, email
+                )
+            `)
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        // Transform data for frontend consumption
+        const items = data.map(activity => ({
+            ...activity,
+            user: {
+                id: activity.user?.id,
+                name: `${activity.user?.first_name || ''} ${activity.user?.last_name || ''}`.trim(),
+                email: activity.user?.email
+            }
+        }));
+        
+        console.log(`Successfully retrieved ${items.length} activities`);
+        return { 
+            success: true, 
+            items,
+            count: items.length
+        };
+    } catch (error) {
+        console.error(`Error fetching activities:`, error);
+        throw new CustomError(`Failed to retrieve activities: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
     }
-    
-    // Format activities for client consumption
-    const formattedActivities = data.map(activity => ({
-        id: activity.id,
-        title: activity.title,
-        description: activity.description,
-        type: activity.type,
-        date: activity.date,
-        metrics: activity.metrics,
-        likes: activity.likes,
-        comments: activity.comments,
-        image: activity.image,
-        user: {
-            id: activity.users.id,
-            name: `${activity.users.first_name} ${activity.users.last_name}`,
-            avatar: activity.users.image || `https://i.pravatar.cc/150?img=${activity.users.id}`
-        }
-    }));
-    
-    return {
-        items: formattedActivities,
-        total: count
-    };
 }
 
 async function get(id) {
-    const { data, error } = await connect()
-        .from(TABLE_NAME)
-        .select(`
-            *,
-            users!user_id (id, first_name, last_name, email, image)
-        `)
-        .eq('id', id)
-        .single();
-    
-    if (error) {
-        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
-    }
-    
-    if (!data) {
-        throw new CustomError('Activity not found', statusCodes.NOT_FOUND);
-    }
-    
-    // Format activity for client consumption
-    return {
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        type: data.type,
-        date: data.date,
-        metrics: data.metrics,
-        likes: data.likes,
-        comments: data.comments,
-        image: data.image,
-        user: {
-            id: data.users.id,
-            name: `${data.users.first_name} ${data.users.last_name}`,
-            avatar: data.users.image || `https://i.pravatar.cc/150?img=${data.users.id}`
+    const supabase = connect();
+    try {
+        console.log(`Fetching activity with ID: ${id}`);
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select(`
+                *,
+                user:user_id (
+                    id, first_name, last_name, email
+                )
+            `)
+            .eq('id', id)
+            .single();
+        
+        if (error) {
+            if (error.code === 'PGRST116') {
+                throw new CustomError(`Activity with ID ${id} not found`, statusCodes.NOT_FOUND);
+            }
+            throw error;
         }
-    };
+        
+        // Transform for frontend
+        const activity = {
+            ...data,
+            user: {
+                id: data.user?.id,
+                name: `${data.user?.first_name || ''} ${data.user?.last_name || ''}`.trim(),
+                email: data.user?.email
+            }
+        };
+        
+        return activity;
+    } catch (error) {
+        if (error instanceof CustomError) throw error;
+        console.error(`Error fetching activity ${id}:`, error);
+        throw new CustomError(`Failed to retrieve activity: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
+    }
 }
 
 async function create(activity) {
-    // Validate activity data
-    if (!activity.title || !activity.description || !activity.type || !activity.user_id || !activity.metrics) {
-        throw new CustomError('Missing required activity fields', statusCodes.BAD_REQUEST);
+    const supabase = connect();
+    try {
+        console.log(`Creating new activity:`, activity);
+        
+        // Ensure created_at is set
+        const activityWithTimestamp = {
+            ...activity,
+            created_at: new Date().toISOString()
+        };
+        
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .insert([activityWithTimestamp])
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        console.log(`Activity created with ID: ${data.id}`);
+        return data;
+    } catch (error) {
+        console.error(`Error creating activity:`, error);
+        throw new CustomError(`Failed to create activity: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
     }
-    
-    // Prepare data for insertion
-    const activityData = {
-        user_id: activity.user_id,
-        title: activity.title,
-        description: activity.description,
-        type: activity.type,
-        date: activity.date || new Date().toISOString(),
-        metrics: activity.metrics,
-        likes: activity.likes || 0,
-        comments: activity.comments || 0,
-        image: activity.image
-    };
-    
-    const { data, error } = await connect().from(TABLE_NAME).insert([activityData]).select();
-    
-    if (error) {
-        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
-    }
-    
-    // Return the newly created activity with user info
-    return await get(data[0].id);
 }
 
 async function update(id, updates) {
-    const { data: existing } = await connect().from(TABLE_NAME).select('*').eq('id', id).single();
-    
-    if (!existing) {
-        throw new CustomError('Activity not found', statusCodes.NOT_FOUND);
+    const supabase = connect();
+    try {
+        console.log(`Updating activity ${id} with:`, updates);
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        if (!data) {
+            throw new CustomError(`Activity with ID ${id} not found`, statusCodes.NOT_FOUND);
+        }
+        
+        return data;
+    } catch (error) {
+        if (error instanceof CustomError) throw error;
+        console.error(`Error updating activity ${id}:`, error);
+        throw new CustomError(`Failed to update activity: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
     }
-    
-    const { data, error } = await connect()
-        .from(TABLE_NAME)
-        .update({
-            ...updates,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .select();
-    
-    if (error) {
-        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
-    }
-    
-    // Return the updated activity with user info
-    return await get(data[0].id);
 }
 
 async function remove(id) {
-    const { data: existing } = await connect().from(TABLE_NAME).select('*').eq('id', id).single();
-    
-    if (!existing) {
-        throw new CustomError('Activity not found', statusCodes.NOT_FOUND);
+    const supabase = connect();
+    try {
+        console.log(`Deleting activity with ID: ${id}`);
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .delete()
+            .eq('id', id)
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        if (!data) {
+            throw new CustomError(`Activity with ID ${id} not found`, statusCodes.NOT_FOUND);
+        }
+        
+        return { success: true, message: `Activity ${id} deleted successfully` };
+    } catch (error) {
+        if (error instanceof CustomError) throw error;
+        console.error(`Error deleting activity ${id}:`, error);
+        throw new CustomError(`Failed to delete activity: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
     }
-    
-    const { data, error } = await connect()
-        .from(TABLE_NAME)
-        .delete()
-        .eq('id', id)
-        .select();
-    
-    if (error) {
-        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
-    }
-    
-    return data[0];
 }
 
 async function getByUserId(userId) {
-    const { data, error, count } = await connect()
-        .from(TABLE_NAME)
-        .select(`
-            *,
-            users!user_id (id, first_name, last_name, email, image)
-        `, { count: 'exact' })
-        .eq('user_id', userId);
-    
-    if (error) {
-        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    const supabase = connect();
+    try {
+        console.log(`Fetching activities for user ID: ${userId}`);
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select(`
+                *,
+                user:user_id (
+                    id, first_name, last_name, email
+                )
+            `)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        // Transform for frontend
+        const items = data.map(activity => ({
+            ...activity,
+            user: {
+                id: activity.user?.id,
+                name: `${activity.user?.first_name || ''} ${activity.user?.last_name || ''}`.trim(),
+                email: activity.user?.email
+            }
+        }));
+        
+        return { 
+            success: true, 
+            items,
+            count: items.length
+        };
+    } catch (error) {
+        console.error(`Error fetching activities for user ${userId}:`, error);
+        throw new CustomError(`Failed to retrieve activities: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
     }
-    
-    // Format activities for client consumption
-    const formattedActivities = data.map(activity => ({
-        id: activity.id,
-        title: activity.title,
-        description: activity.description,
-        type: activity.type,
-        date: activity.date,
-        metrics: activity.metrics,
-        likes: activity.likes,
-        comments: activity.comments,
-        image: activity.image,
-        user: {
-            id: activity.users.id,
-            name: `${activity.users.first_name} ${activity.users.last_name}`,
-            avatar: activity.users.image || `https://i.pravatar.cc/150?img=${activity.users.id}`
-        }
-    }));
-    
-    return {
-        items: formattedActivities,
-        total: count
-    };
 }
 
 module.exports = {

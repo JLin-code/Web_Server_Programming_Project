@@ -68,10 +68,17 @@ function checkLoginBeforeNav(route: string) {
 
 async function login(username: string, password: string) {
   try {
+    console.log(`Attempting login with: ${username}`); // Debugging
     const response = await authService.login(username, password);
+    console.log('Login response:', response); // Debugging
+    
     if (response.success) {
-      currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
-      currentUser.value.isAdmin = response.user.role === 'admin';
+      // Update user information after login
+      const userResponse = await authService.getCurrentUser();
+      console.log('Current user response:', userResponse); // Debugging
+      
+      currentUser.value.name = `${userResponse.user.first_name} ${userResponse.user.last_name}`;
+      currentUser.value.isAdmin = userResponse.user.role === 'admin';
       isLoggedIn.value = true;
       isLoginDropdownActive.value = false;
       
@@ -82,6 +89,7 @@ async function login(username: string, password: string) {
     }
   } catch (error) {
     console.error('Login failed:', error);
+    alert('Login failed. Please check console for details.');
   }
 }
 

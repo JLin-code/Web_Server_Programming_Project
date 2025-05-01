@@ -2,10 +2,12 @@ services:
   - type: web
     name: web-server-programming-project
     env: node
-    buildCommand: pnpm install && pnpm run build
-    startCommand: pnpm start
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 10000
+    healthCheckPath: /api/health
+    autoDeploy: true

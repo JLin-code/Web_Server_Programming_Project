@@ -1,79 +1,96 @@
 const { CustomError, statusCodes } = require('./errors');
-const { supabase, executeQuery } = require('./db');
+const { connect } = require('./supabase');
 
-const TABLE_NAME = 'friendships';
+const TABLE_NAME = 'friends';
 
 async function getFriends(userId) {
-  // Get friend IDs
-  const friendships = await executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .select('friend_id')
-      .eq('user_id', userId)
-  );
-  
-  if (!friendships || friendships.length === 0) {
-    return [];
-  }
-  
-  // Get full user data for each friend
-  const friendIds = friendships.map(f => f.friend_id);
-  
-  return executeQuery(() => 
-    supabase.from('users')
-      .select('id, first_name, last_name, email, handle, created_at')
-      .in('id', friendIds)
-  );
+    // Query to get all friends of a user
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .select('friend_id')
+        .eq('user_id', userId);
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    // Get the detailed user information for each friend
+    const friendIds = data.map(f => f.friend_id);
+    
+    if (friendIds.length === 0) {
+        return { items: [], total: 0 };
+    }
+    
+    const { data: friends, error: friendsError } = await connect()
+        .from('users')
+        .select('*')
+        .in('id', friendIds);
+        
+    if (friendsError) {
+        throw new CustomError(friendsError.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    return {
+        items: friends,
+        total: friends.length
+    };
 }
 
 async function addFriend(userId, friendId) {
-  // Check if friendship already exists
-  const existing = await executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .select('*')
-      .eq('user_id', userId)
-      .eq('friend_id', friendId)
-  );
-  
-  if (existing && existing.length > 0) {
-    throw new CustomError('Friendship already exists', statusCodes.CONFLICT);
-  }
-  
-  // Check that friend exists
-  const friend = await executeQuery(() => 
-    supabase.from('users')
-      .select('id')
-      .eq('id', friendId)
-      .single()
-  );
-  
-  if (!friend) {
-    throw new CustomError('Friend not found', statusCodes.NOT_FOUND);
-  }
-  
-  // Create friendship
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .insert({
-        user_id: userId,
-        friend_id: friendId,
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single()
-  );
+    // Check if users exist
+    const { data: user } = await connect().from('users').select('id').eq('id', userId).single();
+    const { data: friend } = await connect().from('users').select('id').eq('id', friendId).single();
+    
+    if (!user || !friend) {
+        throw new CustomError('User or friend not found', statusCodes.NOT_FOUND);
+    }
+    
+    // Check if already friends
+    const { data: existing } = await connect()
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('user_id', userId)
+        .eq('friend_id', friendId)
+        .single();
+    
+    if (existing) {
+        throw new CustomError('Already friends', statusCodes.BAD_REQUEST);
+    }
+    
+    // Add friend relationship
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .insert([{ user_id: userId, friend_id: friendId }])
+        .select();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    return data[0];
 }
 
 async function removeFriend(userId, friendId) {
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .delete()
-      .eq('user_id', userId)
-      .eq('friend_id', friendId)
-  );
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .delete()
+        .eq('user_id', userId)
+        .eq('friend_id', friendId)
+        .select();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    if (!data || data.length === 0) {
+        throw new CustomError('Friend relationship not found', statusCodes.NOT_FOUND);
+    }
+    
+    return data[0];
 }
 
 module.exports = {
-  getFriends,
-  addFriend,
-  removeFriend
+    getFriends,
+    addFriend,
+    removeFriend
 };

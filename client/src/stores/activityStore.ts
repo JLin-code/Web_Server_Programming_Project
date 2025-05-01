@@ -1,6 +1,6 @@
-import { ref, computed } from 'vue';
-import { userStore } from './userStore';
-import { activitiesService } from '../services/api';
+import { ref } from 'vue';
+import { userStore } from '../stores/userStore';
+import { activitiesService } from '../services/activitiesApi';
 import type { Activity } from '../types';
 
 // Create a reactive array to store activities
@@ -8,7 +8,7 @@ const activities = ref<Activity[]>([]);
 const loading = ref(true);
 const error = ref('');
 
-// Initialize activities from the API
+// Replace mock initialization with API calls
 const initializeActivities = async () => {
   loading.value = true;
   try {
@@ -23,48 +23,7 @@ const initializeActivities = async () => {
   }
 };
 
-// Get activities for current user
-const getMyActivities = async () => {
-  loading.value = true;
-  try {
-    const response = await activitiesService.getMyActivities();
-    activities.value = response.items || [];
-  } catch (err) {
-    console.error('Failed to load my activities:', err);
-    error.value = 'Failed to load my activities';
-    activities.value = [];
-  } finally {
-    loading.value = false;
-  }
-};
-
-// Get activities from friends
-const getFriendActivities = async () => {
-  loading.value = true;
-  try {
-    const response = await activitiesService.getFriendActivities();
-    activities.value = response.items || [];
-  } catch (err) {
-    console.error('Failed to load friend activities:', err);
-    error.value = 'Failed to load friend activities';
-    activities.value = [];
-  } finally {
-    loading.value = false;
-  }
-};
-
-// Get activity statistics
-const getActivityStats = async (period = 'week') => {
-  try {
-    const response = await activitiesService.getActivityStats(period);
-    return response.item;
-  } catch (err) {
-    console.error(`Failed to load activity stats for ${period}:`, err);
-    throw err;
-  }
-};
-
-// Delete an activity
+// Keep the actions but make them use the API
 const deleteActivity = async (id: string | number) => {
   try {
     await activitiesService.delete(id);
@@ -75,7 +34,6 @@ const deleteActivity = async (id: string | number) => {
   }
 };
 
-// Like an activity
 const likeActivity = async (id: string | number) => {
   const activity = activities.value.find(a => a.id === id);
   if (!activity) return;
@@ -100,22 +58,25 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// Add a new activity
+// Add activity function that calls the API
 const addActivity = async (
   title: string,
   description: string,
   type: string,
   metrics: Record<string, string | number>,
   image?: string
-): Promise<Activity | null> => {
+) => {
   try {
-    const currentUser = userStore.currentUser.value;
-    if (!currentUser) {
+    const userResponse = await userStore.currentUser;
+    if (!userResponse) {
       error.value = 'User not logged in';
       return null;
     }
     
-    const newActivity = {
+    const userId = userResponse.value?.id;
+    
+    const newActivity: Partial<Activity> = {
+      user_id: userId,
       title,
       description,
       type,
@@ -124,11 +85,8 @@ const addActivity = async (
     };
     
     const response = await activitiesService.create(newActivity);
-    if (response.item) {
-      activities.value.unshift(response.item);
-      return response.item;
-    }
-    return null;
+    activities.value.unshift(response);
+    return response;
   } catch (err) {
     console.error('Failed to add activity:', err);
     error.value = 'Failed to add activity';
@@ -136,15 +94,11 @@ const addActivity = async (
   }
 };
 
-// Export the store
 export const activityStore = {
   activities,
   loading,
   error,
   initializeActivities,
-  getMyActivities,
-  getFriendActivities,
-  getActivityStats,
   deleteActivity,
   likeActivity,
   formatDate,

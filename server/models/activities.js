@@ -1,201 +1,196 @@
 const { CustomError, statusCodes } = require('./errors');
-const { supabase, executeQuery } = require('./db');
+const { connect } = require('./supabase');
 
 const TABLE_NAME = 'activities';
 
 async function getAll() {
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .select(`
-        *,
-        user:user_id (
-          id, first_name, last_name, handle, email
-        )
-      `)
-      .order('date', { ascending: false })
-  );
+    const { data, error, count } = await connect()
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            users!user_id (id, first_name, last_name, email, image)
+        `, { count: 'exact' });
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    // Format activities for client consumption
+    const formattedActivities = data.map(activity => ({
+        id: activity.id,
+        title: activity.title,
+        description: activity.description,
+        type: activity.type,
+        date: activity.date,
+        metrics: activity.metrics,
+        likes: activity.likes,
+        comments: activity.comments,
+        image: activity.image,
+        user: {
+            id: activity.users.id,
+            name: `${activity.users.first_name} ${activity.users.last_name}`,
+            avatar: activity.users.image || `https://i.pravatar.cc/150?img=${activity.users.id}`
+        }
+    }));
+    
+    return {
+        items: formattedActivities,
+        total: count
+    };
 }
 
 async function get(id) {
-  const data = await executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .select(`
-        *,
-        user:user_id (
-          id, first_name, last_name, handle, email
-        )
-      `)
-      .eq('id', id)
-      .single()
-  );
-  
-  if (!data) {
-    throw new CustomError(`Activity with ID ${id} not found`, statusCodes.NOT_FOUND);
-  }
-  
-  return data;
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            users!user_id (id, first_name, last_name, email, image)
+        `)
+        .eq('id', id)
+        .single();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    if (!data) {
+        throw new CustomError('Activity not found', statusCodes.NOT_FOUND);
+    }
+    
+    // Format activity for client consumption
+    return {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        type: data.type,
+        date: data.date,
+        metrics: data.metrics,
+        likes: data.likes,
+        comments: data.comments,
+        image: data.image,
+        user: {
+            id: data.users.id,
+            name: `${data.users.first_name} ${data.users.last_name}`,
+            avatar: data.users.image || `https://i.pravatar.cc/150?img=${data.users.id}`
+        }
+    };
 }
 
 async function create(activity) {
-  if (!activity.title || !activity.type || !activity.user_id) {
-    throw new CustomError('Missing required fields', statusCodes.BAD_REQUEST);
-  }
-  
-  const newActivity = {
-    ...activity,
-    date: activity.date || new Date().toISOString(),
-    metrics: activity.metrics || {},
-    likes: 0,
-    comments: 0,
-    created_at: new Date().toISOString()
-  };
-  
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .insert(newActivity)
-      .select(`
-        *,
-        user:user_id (
-          id, first_name, last_name, handle, email
-        )
-      `)
-      .single()
-  );
+    // Validate activity data
+    if (!activity.title || !activity.description || !activity.type || !activity.user_id || !activity.metrics) {
+        throw new CustomError('Missing required activity fields', statusCodes.BAD_REQUEST);
+    }
+    
+    // Prepare data for insertion
+    const activityData = {
+        user_id: activity.user_id,
+        title: activity.title,
+        description: activity.description,
+        type: activity.type,
+        date: activity.date || new Date().toISOString(),
+        metrics: activity.metrics,
+        likes: activity.likes || 0,
+        comments: activity.comments || 0,
+        image: activity.image
+    };
+    
+    const { data, error } = await connect().from(TABLE_NAME).insert([activityData]).select();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    // Return the newly created activity with user info
+    return await get(data[0].id);
 }
 
 async function update(id, updates) {
-  const updatedActivity = {
-    ...updates,
-    updated_at: new Date().toISOString()
-  };
-  
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .update(updatedActivity)
-      .eq('id', id)
-      .select(`
-        *,
-        user:user_id (
-          id, first_name, last_name, handle, email
-        )
-      `)
-      .single()
-  );
+    const { data: existing } = await connect().from(TABLE_NAME).select('*').eq('id', id).single();
+    
+    if (!existing) {
+        throw new CustomError('Activity not found', statusCodes.NOT_FOUND);
+    }
+    
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .update({
+            ...updates,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    // Return the updated activity with user info
+    return await get(data[0].id);
 }
 
 async function remove(id) {
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .delete()
-      .eq('id', id)
-  );
+    const { data: existing } = await connect().from(TABLE_NAME).select('*').eq('id', id).single();
+    
+    if (!existing) {
+        throw new CustomError('Activity not found', statusCodes.NOT_FOUND);
+    }
+    
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .delete()
+        .eq('id', id)
+        .select();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    return data[0];
 }
 
 async function getByUserId(userId) {
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .select(`
-        *,
-        user:user_id (
-          id, first_name, last_name, handle, email
-        )
-      `)
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
-  );
-}
-
-async function getFriendActivities(userId) {
-  // Get friends list first
-  const { data: friendships } = await supabase
-    .from('friendships')
-    .select('friend_id')
-    .eq('user_id', userId);
+    const { data, error, count } = await connect()
+        .from(TABLE_NAME)
+        .select(`
+            *,
+            users!user_id (id, first_name, last_name, email, image)
+        `, { count: 'exact' })
+        .eq('user_id', userId);
     
-  if (!friendships || friendships.length === 0) {
-    return [];
-  }
-  
-  // Extract friend IDs
-  const friendIds = friendships.map(f => f.friend_id);
-  
-  // Get activities from friends
-  return executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .select(`
-        *,
-        user:user_id (
-          id, first_name, last_name, handle, email
-        )
-      `)
-      .in('user_id', friendIds)
-      .order('date', { ascending: false })
-  );
-}
-
-async function getActivityStats(userId, period = 'week') {
-  // Get date range based on period
-  const now = new Date();
-  let startDate;
-  
-  switch(period) {
-    case 'day':
-      startDate = new Date(now.setHours(0, 0, 0, 0));
-      break;
-    case 'week':
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 7);
-      break;
-    case 'month':
-      startDate = new Date(now);
-      startDate.setMonth(now.getMonth() - 1);
-      break;
-    case 'year':
-      startDate = new Date(now);
-      startDate.setFullYear(now.getFullYear() - 1);
-      break;
-    default:
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 7); // Default to week
-  }
-  
-  const activities = await executeQuery(() => 
-    supabase.from(TABLE_NAME)
-      .select('*')
-      .eq('user_id', userId)
-      .gte('date', startDate.toISOString())
-      .lte('date', now.toISOString())
-  );
-  
-  // Calculate statistics
-  let steps = 0;
-  let calories = 0;
-  let distance = 0;
-  
-  activities.forEach(activity => {
-    if (activity.metrics) {
-      if (activity.metrics.steps) steps += parseInt(activity.metrics.steps);
-      if (activity.metrics.calories) calories += parseInt(activity.metrics.calories);
-      if (activity.metrics.distance) distance += parseFloat(activity.metrics.distance);
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
     }
-  });
-  
-  return {
-    period,
-    activities: activities.length,
-    steps: steps.toLocaleString(),
-    calories: calories.toLocaleString(),
-    distance: distance.toFixed(1) + 'km'
-  };
+    
+    // Format activities for client consumption
+    const formattedActivities = data.map(activity => ({
+        id: activity.id,
+        title: activity.title,
+        description: activity.description,
+        type: activity.type,
+        date: activity.date,
+        metrics: activity.metrics,
+        likes: activity.likes,
+        comments: activity.comments,
+        image: activity.image,
+        user: {
+            id: activity.users.id,
+            name: `${activity.users.first_name} ${activity.users.last_name}`,
+            avatar: activity.users.image || `https://i.pravatar.cc/150?img=${activity.users.id}`
+        }
+    }));
+    
+    return {
+        items: formattedActivities,
+        total: count
+    };
 }
 
 module.exports = {
-  getAll,
-  get,
-  create,
-  update,
-  remove,
-  getByUserId,
-  getFriendActivities,
-  getActivityStats
+    getAll,
+    get,
+    create,
+    update,
+    remove,
+    getByUserId
 };

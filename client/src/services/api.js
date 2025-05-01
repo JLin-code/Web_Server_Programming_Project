@@ -1,124 +1,43 @@
-const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
-// Helper function for making fetch requests
-async function fetchApi(endpoint, options = {}) {
-    const url = `${API_URL}${endpoint}`;
-    const defaultOptions = {
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        credentials: 'include' // Important for cookies/sessions
-    };
-    const response = await fetch(url, { ...defaultOptions, ...options });
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(error.message || `API error: ${response.status}`);
-    }
-    return response.json();
-}
-// Authentication API
-export const authService = {
-    login: async (username, password) => {
-        return fetchApi('/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({ username, password })
-        });
-    },
-    logout: async () => {
-        return fetchApi('/auth/logout', { method: 'POST' });
-    },
-    getCurrentUser: async () => {
-        return fetchApi('/auth/me');
-    },
-    register: async (userData) => {
-        return fetchApi('/auth/register', {
-            method: 'POST',
-            body: JSON.stringify(userData)
-        });
-    },
-    getUsers: async () => {
-        try {
-            return await fetchApi('/auth/demo-users');
-        }
-        catch (error) {
-            console.error('Error in getUsers:', error);
-            // Return a fallback if server is unreachable
-            return {
-                success: false,
-                users: [{ username: 'Admin', displayName: 'Admin (Fallback)' }]
-            };
-        }
-    }
-};
-// Users API
-export const userService = {
-    getAll: async () => {
-        return fetchApi('/users');
-    },
-    getById: async (id) => {
-        return fetchApi(`/users/${id}`);
-    },
-    create: async (userData) => {
-        return fetchApi('/users', {
-            method: 'POST',
-            body: JSON.stringify(userData)
-        });
-    },
-    update: async (id, userData) => {
-        return fetchApi(`/users/${id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(userData)
-        });
-    },
-    delete: async (id) => {
-        return fetchApi(`/users/${id}`, { method: 'DELETE' });
-    },
-    // Add getCurrentUser method that uses the auth endpoint
-    getCurrentUser: async () => {
-        return fetchApi('/auth/me');
-    }
-};
-// Products API
-export const productService = {
-    getAll: async () => {
-        return fetchApi('/products');
-    },
-    getById: async (id) => {
-        return fetchApi(`/products/${id}`);
-    },
-    create: async (productData) => {
-        return fetchApi('/products', {
-            method: 'POST',
-            body: JSON.stringify(productData)
-        });
-    },
-    update: async (id, productData) => {
-        return fetchApi(`/products/${id}`, {
-            method: 'PATCH',
-            body: JSON.stringify(productData)
-        });
-    },
-    delete: async (id) => {
-        return fetchApi(`/products/${id}`, { method: 'DELETE' });
-    }
-};
-// Friends API
-export const friendService = {
-    getFriends: async (userId) => {
-        return fetchApi(`/friends/${userId}`);
-    },
-    addFriend: async (userId, friendId) => {
-        return fetchApi(`/friends/${userId}/add/${friendId}`, { method: 'POST' });
-    },
-    removeFriend: async (userId, friendId) => {
-        return fetchApi(`/friends/${userId}/remove/${friendId}`, { method: 'DELETE' });
-    }
-};
-// Global error handler for fetch
-window.addEventListener('unhandledrejection', (event) => {
-    if (event.reason instanceof Error && event.reason.message.includes('API error: 401')) {
-        console.error('Authentication error');
-        // You can add logic to redirect to login page here
-    }
+import axios from 'axios';
+import { authHeader, isAuthenticated } from './auth';
+
+// Base URL from environment variables with fallback
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+
+// Create axios instance with custom config
+const apiClient = axios.create({
+  baseURL,
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  withCredentials: true, // Enable sending cookies with requests
+  timeout: 10000
 });
-export default { authService, userService, productService, friendService };
-//# sourceMappingURL=api.js.map
+
+// Add request interceptor to attach auth token
+apiClient.interceptors.request.use(
+  config => {
+    // Use the authHeader function from auth.js instead of the store
+    if (isAuthenticated()) {
+      Object.assign(config.headers, authHeader());
+    }
+    
+    return config;
+  },
+  error => Promise.reject(error)
+);
+
+// Add response interceptor for error handling
+apiClient.interceptors.response.use(
+  response => response,
+  error => {
+    // Log errors to console in development
+    if (import.meta.env.DEV) {
+      console.error('API Error:', error.response || error);
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+export default apiClient;

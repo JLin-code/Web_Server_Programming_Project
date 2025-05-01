@@ -7,12 +7,16 @@ import SignUpView from '../views/SignUpView.vue'
 import FriendsActivityView from '../views/FriendsActivityView.vue'
 
 const router = createRouter({
-  history: createWebHistory(''),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
       name: 'home',
       component: HomeView,
+      beforeEnter: (to, from, next) => {
+        console.log('Navigating to home route')
+        next()
+      }
     },
     {
       path: '/friend-activity',
@@ -45,6 +49,12 @@ const router = createRouter({
       component: SignUpView,
     },
   ],
+})
+
+// Add global navigation guards for debugging
+router.beforeEach((to, from) => {
+  console.log(`Navigation: ${from.path} → ${to.path}`)
+  return true
 })
 
 export default router

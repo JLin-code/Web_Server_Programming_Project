@@ -6,6 +6,7 @@ import { ref, onMounted, onErrorCaptured } from 'vue'
 const hasError = ref(false);
 const errorMessage = ref('');
 const appVersion = '1.0.0'; // Add version for debugging
+const debug = ref(true); // Add debug flag
 
 // Define reloadPage method
 const reloadPage = () => {
@@ -14,6 +15,8 @@ const reloadPage = () => {
 
 onMounted(() => {
   console.log(`Fitness Tracker App v${appVersion} initializing...`);
+  console.log('Debug mode:', debug.value);
+  console.log('Error state:', hasError.value);
 });
 
 // Add global error handler
@@ -28,6 +31,11 @@ onErrorCaptured((err, instance, info) => {
 
 <template>
   <div class="app-container">
+    <!-- Debug info when in debug mode -->
+    <div v-if="debug" class="debug-info">
+      <strong>DEBUG:</strong> App loaded, error state: {{ hasError }}
+    </div>
+    
     <!-- Error fallback -->
     <div v-if="hasError" class="error-container">
       <div class="error-content">
@@ -170,5 +178,19 @@ button:hover, .btn:hover {
 
 .reload-button:hover {
   background-color: var(--accent-hover);
+}
+
+/* Add debugging styles */
+.debug-info {
+  background-color: #ffeb3b;
+  color: #333;
+  padding: 10px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  text-align: center;
+  font-family: monospace;
 }
 </style>

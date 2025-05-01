@@ -2,8 +2,6 @@ const { createClient } = require('@supabase/supabase-js');
 const { CustomError, statusCodes } = require('./errors');
 
 // Get credentials from environment variables with fallbacks
-// NOTE: These fallbacks should only be used for development. For production,
-// always use environment variables.
 const supabaseUrl = process.env.SUPABASE_URL || 'https://chuhfxkepvakwgmhiuep.supabase.co';
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
 
@@ -85,6 +83,7 @@ function connect() {
         try {
             const urlObj = new URL(supabaseUrl);
             const pingUrl = `${urlObj.protocol}//${urlObj.host}/ping`;
+            
             console.log(`Checking connectivity to ${pingUrl}...`);
             
             const pingResponse = await fetch(pingUrl, { 

@@ -58,15 +58,27 @@ onMounted(async () => {
     loading.value = true;
     
     // Get current user
-    const userResponse = await authService.getCurrentUser();
-    currentUser.value = {
-      id: userResponse.user.id,
-      name: `${userResponse.user.first_name} ${userResponse.user.last_name}`
-    };
+    const response = await authService.getCurrentUser();
+    if (response && response.user) {
+      currentUser.value = {
+        id: response.user.id,
+        name: `${response.user.first_name} ${response.user.last_name}`
+      };
+    }
     
     // Get activities
-    const response = await activitiesService.getAll();
-    activities.value = response.items || [];
+    const activityResponse = await activitiesService.getAll();
+    activities.value = activityResponse.items || [];
+    
+    // If using fallback data, filter by the current user's email
+    if (activityResponse.source === 'fallback') {
+      console.log('Using fallback activities data, filtering by current user');
+      // For fallback scenarios, compare by name since we might not have consistent IDs
+      activities.value = activities.value.filter(activity => 
+        activity.user.name === currentUser.value.name ||
+        activity.user.email === currentUser.value.email
+      );
+    }
   } catch (err) {
     error.value = 'Failed to load your activities';
     console.error(err);

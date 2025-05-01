@@ -11,33 +11,33 @@ export const demoUsers: DemoUser[] = [
     username: 'john.doe@example.com',
     displayName: 'John Dwefoe (User)',
     firstName: 'John',
-    lastName: 'Doeewf',
+    lastName: 'Doe',
     role: 'user'
   },
   {
     username: 'jane.smith@example.com',
-    displayName: 'Jane Smifwqeth (User)',
+    displayName: 'Jane Smith (User)',
     firstName: 'Jane',
     lastName: 'Smith',
     role: 'user'
   },
   {
     username: 'admin@example.com',
-    displayName: 'Admin Uqwfeser (Admin)',
+    displayName: 'Michael Brown (Admin)',
     firstName: 'Admin',
     lastName: 'User',
     role: 'admin'
   },
   {
     username: 'emily.johnson@example.com',
-    displayName: 'Emily Johnsfqweon (User)',
+    displayName: 'Emily Johnson (User)',
     firstName: 'Emily',
     lastName: 'Johnson',
     role: 'user'
   },
   {
     username: 'david.wilson@example.com',
-    displayName: 'David Wilsfewqon (User)',
+    displayName: 'David Wilson (User)',
     firstName: 'David',
     lastName: 'Wilson',
     role: 'user'

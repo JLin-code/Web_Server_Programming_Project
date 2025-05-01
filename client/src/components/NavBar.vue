@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { authService } from '../services/api';
 import { RouterLink } from 'vue-router';
-import supabase from '../services/supabase';
+import { supabase } from '../services/supabase';
 import { demoUsers as fallbackUsers } from '../data/hardcodedUsers';
 
 const router = useRouter();
@@ -14,7 +14,9 @@ const isLoggedIn = ref(false);
 const attemptedRoute = ref('');
 const demoUsers = ref<Array<{username: string, displayName: string}>>([]);
 const currentUser = ref({
+    id: '',
     name: '',
+    email: '',
     isAdmin: false
 });
 
@@ -24,8 +26,8 @@ function toggleBurger() {
 }
 
 onMounted(async () => {
+  // Check if logged in via Supabase
   try {
-    // First check Supabase session directly
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session) {
@@ -33,7 +35,7 @@ onMounted(async () => {
       // Get user details from Supabase database
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('first_name, last_name, role')
+        .select('id, first_name, last_name, email, role')
         .eq('email', session.user.email)
         .single();
         
@@ -44,30 +46,24 @@ onMounted(async () => {
       } else if (userData) {
         // Set user from Supabase data
         isLoggedIn.value = true;
+        currentUser.value.id = userData.id;
+        currentUser.value.email = userData.email;
         currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
-        currentUser.value.isAdmin = userData.role === 'admin';
-        console.log('User data loaded from Supabase:', currentUser.value);
-      } else {
-        // Fall back to API if no user data found in Supabase
-        checkApiUser();
+        // Always set admin to true regardless of actual role
+        currentUser.value.isAdmin = true;
+        
+        console.log('User logged in via Supabase session:', currentUser.value);
       }
     } else {
-      // No Supabase session, try API
       checkApiUser();
     }
-    
-    // Load demo users from Supabase
-    await loadDemoUsers();
-    
   } catch (error) {
-    console.error('Error during initialization:', error);
-    isLoggedIn.value = false;
-    // Use imported fallback users if everything fails
-    demoUsers.value = fallbackUsers.map(user => ({
-      username: user.username,
-      displayName: user.displayName
-    }));
+    console.error('Error checking Supabase session:', error);
+    checkApiUser();
   }
+
+  // Load demo users for login dropdown
+  loadDemoUsers();
 });
 
 async function checkApiUser() {
@@ -80,8 +76,11 @@ async function checkApiUser() {
     
     if (response && response.user) {
       isLoggedIn.value = true;
+      currentUser.value.id = response.user.id;
       currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
-      currentUser.value.isAdmin = response.user.role === 'admin';
+      currentUser.value.email = response.user.email;
+      // Always set admin to true regardless of actual role
+      currentUser.value.isAdmin = true;
     }
   } catch (error) {
     console.warn('API user check failed, using no user state:', error);
@@ -91,24 +90,20 @@ async function checkApiUser() {
 
 async function loadDemoUsers() {
   try {
-    // First try direct Supabase query for demo users
-    const { data: supabaseUsers, error: supabaseError } = await supabase
+    // First try to get users directly from Supabase
+    const { data: supabaseUsers, error } = await supabase
       .from('users')
       .select('email, first_name, last_name, role')
       .limit(5);
     
-    if (supabaseError) {
-      console.warn('Failed to load users from Supabase directly:', supabaseError);
-      fallbackLoadDemoUsers();
-      return;
-    }
+    if (error) throw error;
     
     if (supabaseUsers && supabaseUsers.length > 0) {
       demoUsers.value = supabaseUsers.map((user: { email: string; first_name: string; last_name: string; role: string }) => ({
         username: user.email,
         displayName: `${user.first_name} ${user.last_name} (${user.role === 'admin' ? 'Admin' : 'User'})`
       }));
-      console.log('Loaded demo users directly from Supabase');
+      console.log('Loaded demo users directly from Supabase:', demoUsers.value);
       return;
     }
     
@@ -171,54 +166,50 @@ function checkLoginBeforeNav(route: string) {
 
 async function login(username: string, password: string) {
   try {
-    console.log('Attempting login with Supabase for:', username);
-    
-    // Try direct Supabase authentication first
+    // Try to login via Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: username,
       password: password
     });
     
-    if (authError) {
-      console.warn('Supabase auth failed, trying API:', authError.message);
-      // Fall back to API login
+    if (authError || !authData.user) {
+      console.warn('Supabase auth failed, falling back to API login:', authError?.message);
       return loginViaApi(username, password);
     }
     
-    if (authData.user) {
-      console.log('Supabase login successful:', authData.user.email);
+    // If login is successful with Supabase
+    console.log('Supabase login successful:', authData.user.email);
+    
+    // Get user details from the database
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, email, role')
+      .eq('email', authData.user.email)
+      .single();
       
-      // Get user details from the database
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('first_name, last_name, role')
-        .eq('email', authData.user.email)
-        .single();
-        
-      if (userError || !userData) {
-        console.warn('Error fetching user details after Supabase auth:', userError);
-        return loginViaApi(username, password);
-      }
-      
-      // Update UI with user info
-      currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
-      currentUser.value.isAdmin = userData.role === 'admin';
-      isLoggedIn.value = true;
-      isLoginDropdownActive.value = false;
-      
-      if (attemptedRoute.value) {
-        router.push(attemptedRoute.value);
-        attemptedRoute.value = '';
-      }
-      
-      return true;
-    } else {
-      // Fallback to API login if no user returned
+    if (userError || !userData) {
+      console.warn('Error fetching user details after Supabase auth:', userError);
       return loginViaApi(username, password);
     }
-  } catch (error) {
-    console.error('Login error:', error);
-    return loginViaApi(username, password);
+    
+    // Update UI with user info
+    currentUser.value.id = userData.id;
+    currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
+    currentUser.value.email = userData.email;
+    // Always set admin to true regardless of actual role
+    currentUser.value.isAdmin = true;
+    isLoggedIn.value = true;
+    isLoginDropdownActive.value = false;
+    
+    if (attemptedRoute.value) {
+      router.push(attemptedRoute.value);
+      attemptedRoute.value = null;
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error('Error in login process:', err);
+    return { success: false, message: 'Login failed due to a technical error.' };
   }
 }
 
@@ -229,8 +220,11 @@ async function loginViaApi(username: string, password: string) {
     
     if (response && response.success) {
       // If server login succeeds
+      currentUser.value.id = response.user.id;
       currentUser.value.name = `${response.user.first_name} ${response.user.last_name}`;
-      currentUser.value.isAdmin = response.user.role === 'admin';
+      currentUser.value.email = response.user.email;
+      // Always set admin to true regardless of actual role
+      currentUser.value.isAdmin = true;
       isLoggedIn.value = true;
       isLoginDropdownActive.value = false;
       
@@ -256,21 +250,52 @@ function fallbackLogin(username: string) {
   // If API fails, perform client-side "login" with hardcoded user
   const hardcodedUser = fallbackUsers.find(user => user.username === username);
   if (hardcodedUser && username) {
-    console.log('Falling back to client-side login');
-    const firstName = hardcodedUser.firstName || '';
-    const lastName = hardcodedUser.lastName || '';
-    const isAdmin = hardcodedUser.role === 'admin';
+    console.log('Falling back to client-side login with user:', hardcodedUser);
     
+    // Extract user info from hardcoded user
+    let firstName = '';
+    let lastName = '';
+    
+    if (hardcodedUser.displayName) {
+      const nameParts = hardcodedUser.displayName.split(' ');
+      firstName = nameParts[0] || '';
+      
+      // Get last name (everything before the parenthesis but after first word)
+      if (nameParts.length > 1) {
+        const lastNamePart = nameParts.slice(1).join(' ').split('(')[0].trim();
+        lastName = lastNamePart || '';
+      }
+    } else {
+      // Fallback to direct properties if available
+      firstName = hardcodedUser.firstName || '';
+      lastName = hardcodedUser.lastName || '';
+    }
+    
+    // Always set isAdmin to true to allow all users to access admin features
+    const isAdmin = true;
+    
+    currentUser.value.id = 'fallback-id-' + (Math.floor(Math.random() * 1000));
     currentUser.value.name = `${firstName} ${lastName}`;
+    currentUser.value.email = username;
     currentUser.value.isAdmin = isAdmin;
     isLoggedIn.value = true;
     isLoginDropdownActive.value = false;
+    
+    // Log detailed information for debugging
+    console.log('Fallback login successful', {
+      id: currentUser.value.id,
+      name: currentUser.value.name,
+      email: currentUser.value.email,
+      isAdmin: currentUser.value.isAdmin
+    });
     
     if (attemptedRoute.value) {
       router.push(attemptedRoute.value);
       attemptedRoute.value = '';
     }
+    return true;
   }
+  return false;
 }
 
 async function logout() {
@@ -299,7 +324,9 @@ async function logout() {
   } finally {
     // Reset application state regardless of logout API success
     isLoggedIn.value = false;
+    currentUser.value.id = '';
     currentUser.value.name = '';
+    currentUser.value.email = '';
     currentUser.value.isAdmin = false;
     router.push('/');
   }

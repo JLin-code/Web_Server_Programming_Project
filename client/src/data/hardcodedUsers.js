@@ -4,35 +4,35 @@
 export const demoUsers = [
   { 
     username: 'john.doe@example.com', 
-    displayName: 'John Bone (User)',
+    displayName: 'John Doe (User)',
     firstName: 'John',
     lastName: 'Doe',
     role: 'user'
   },
   { 
     username: 'jane.smith@example.com', 
-    displayName: 'Jane wetrgf (User)',
+    displayName: 'Jane Smith (User)',
     firstName: 'Jane',
     lastName: 'Smith',
     role: 'user'
   },
   { 
     username: 'admin@example.com', 
-    displayName: 'Michael Brosadgwn (Admin)',
+    displayName: 'Michael Brown (Admin)',
     firstName: 'Michael',
     lastName: 'Brown',
     role: 'admin'
   },
   { 
     username: 'emily.johnson@example.com', 
-    displayName: 'Emily Johwqregnson (User)',
+    displayName: 'Emily Johnson (User)',
     firstName: 'Emily',
     lastName: 'Johnson',
     role: 'user'
   },
   { 
     username: 'david.wilson@example.com', 
-    displayName: 'David Wilsdgson (User)',
+    displayName: 'David Wilson (User)',
     firstName: 'David',
     lastName: 'Wilson',
     role: 'user'

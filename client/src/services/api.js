@@ -1,8 +1,4 @@
-// Fix the API base URL configuration to work in both development and production
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === 'localhost' ? 'http://localhost:3000/api/v1' : '/api/v1');
-
-const API_URL = API_BASE_URL;
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 // Helper function for making fetch requests
 async function fetchApi(endpoint, options = {}) {
     const url = `${API_URL}${endpoint}`;

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import NavBar from './components/NavBar.vue'
-import DebugPanel from './components/DebugPanel.vue'
 
 </script>
 
@@ -16,7 +15,6 @@ import DebugPanel from './components/DebugPanel.vue'
     <footer class="app-footer">
       <p>© {{ new Date().getFullYear() }} Fitness Tracker</p>
     </footer>
-    <DebugPanel />
   </div>
 </template>
 

@@ -27,14 +27,13 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+    if (allowedOrigins.indexOf(origin) !== -1) {
       return callback(null, true);
     } else {
       return callback(null, false);
     }
   },
-  credentials: true,
-  optionsSuccessStatus: 200
+  credentials: true
 }));
 
 app.use(express.json());

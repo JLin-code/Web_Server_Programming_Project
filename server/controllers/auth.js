@@ -1,5 +1,5 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs'); // Changed from bcrypt to bcryptjs
 const jwt = require('jsonwebtoken');
 const { CustomError, statusCodes } = require('../models/errors');
 const userModel = require('../models/users');

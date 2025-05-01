@@ -4,81 +4,106 @@ const { connect } = require('./supabase');
 const TABLE_NAME = 'users';
 
 async function getAll() {
-    const supabase = connect();
-    const { data, error } = await supabase.from(TABLE_NAME).select('*');
+    const { data, error, count } = await connect().from(TABLE_NAME).select('*', { count: 'exact' });
     
     if (error) {
-        throw new CustomError(`Failed to get users: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
     }
     
-    return data;
+    return {
+        items: data,
+        total: count
+    };
 }
 
 async function get(id) {
-    const supabase = connect();
-    const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('id', id).single();
+    const { data, error } = await connect().from(TABLE_NAME).select('*').eq('id', id).single();
     
     if (error) {
-        if (error.code === 'PGRST116') {
-            throw new CustomError(`User with id ${id} not found`, statusCodes.NOT_FOUND);
-        }
-        throw new CustomError(`Failed to get user: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    if (!data) {
+        throw new CustomError('User not found', statusCodes.NOT_FOUND);
     }
     
     return data;
 }
 
 async function getByEmail(email) {
-    const supabase = connect();
-    const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('email', email).single();
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .select('*')
+        .eq('email', email)
+        .single();
     
     if (error) {
-        if (error.code === 'PGRST116') {
-            return null; // No user found with this email
-        }
-        throw new CustomError(`Failed to get user: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    if (!data) {
+        throw new CustomError('User not found', statusCodes.NOT_FOUND);
     }
     
     return data;
 }
 
 async function create(user) {
-    const supabase = connect();
-    const { data, error } = await supabase.from(TABLE_NAME).insert([user]).select().single();
-    
-    if (error) {
-        throw new CustomError(`Failed to create user: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
+    // Validate user data
+    if (!user.email || !user.first_name || !user.last_name) {
+        throw new CustomError('Missing required user fields', statusCodes.BAD_REQUEST);
     }
     
-    return data;
+    const { data, error } = await connect().from(TABLE_NAME).insert([user]).select();
+    
+    if (error) {
+        if (error.code === '23505') { // Unique constraint violation
+            throw new CustomError('Email already in use', statusCodes.BAD_REQUEST);
+        }
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    return data[0];
 }
 
 async function update(id, updates) {
-    const supabase = connect();
-    const { data, error } = await supabase.from(TABLE_NAME).update(updates).eq('id', id).select().single();
+    const { data: existing } = await connect().from(TABLE_NAME).select('*').eq('id', id).single();
     
-    if (error) {
-        if (error.code === 'PGRST116') {
-            throw new CustomError(`User with id ${id} not found`, statusCodes.NOT_FOUND);
-        }
-        throw new CustomError(`Failed to update user: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
+    if (!existing) {
+        throw new CustomError('User not found', statusCodes.NOT_FOUND);
     }
     
-    return data;
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .update(updates)
+        .eq('id', id)
+        .select();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    return data[0];
 }
 
 async function remove(id) {
-    const supabase = connect();
-    const { data, error } = await supabase.from(TABLE_NAME).delete().eq('id', id).select().single();
+    const { data: existing } = await connect().from(TABLE_NAME).select('*').eq('id', id).single();
     
-    if (error) {
-        if (error.code === 'PGRST116') {
-            throw new CustomError(`User with id ${id} not found`, statusCodes.NOT_FOUND);
-        }
-        throw new CustomError(`Failed to delete user: ${error.message}`, statusCodes.INTERNAL_SERVER_ERROR);
+    if (!existing) {
+        throw new CustomError('User not found', statusCodes.NOT_FOUND);
     }
     
-    return data;
+    const { data, error } = await connect()
+        .from(TABLE_NAME)
+        .delete()
+        .eq('id', id)
+        .select();
+    
+    if (error) {
+        throw new CustomError(error.message, statusCodes.INTERNAL_SERVER_ERROR);
+    }
+    
+    return data[0];
 }
 
 module.exports = {

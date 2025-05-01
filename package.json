@@ -1,12 +1,16 @@
 {
-  "name": "fitness-tracker",
+  "name": "web-server-programming-project",
   "version": "1.0.0",
   "private": true,
-  "description": "Web Server Programming Project",
+  "description": "Full stack web application",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "nodemon server/index.js --watch server"
+    "dev": "nodemon server/index.js",
+    "build": "cd client && pnpm install && pnpm build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "license": "ISC",
   "dependencies": {

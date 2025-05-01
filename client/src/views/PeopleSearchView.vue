@@ -35,11 +35,11 @@ onMounted(async () => {
     let friendIds = new Set();
     if (currentUserId.value !== null) {
       const friendsResponse = await friendService.getFriends(currentUserId.value);
-      friendIds = new Set(friendsResponse.items.map((friend: any) => friend.id));
+      friendIds = new Set(friendsResponse.items.map((friend: { id: number }) => friend.id));
     }
     
     // Mark friends in the user list
-    users.value = response.items.map((user: any) => ({
+    users.value = response.items.map((user: { id: number; first_name: string; last_name: string; email: string; handle?: string }) => ({
       id: user.id,
       firstName: user.first_name,
       lastName: user.last_name,
@@ -70,7 +70,7 @@ function filteredUsers() {
   );
 }
 
-async function addFriend(user: any) {
+async function addFriend(user: { id: number; firstName: string; lastName: string; email: string; handle: string; isFriend: boolean }) {
   try {
     if (!currentUserId.value) return;
     
@@ -82,7 +82,7 @@ async function addFriend(user: any) {
   }
 }
 
-async function removeFriend(user: any) {
+async function removeFriend(user: { id: number; firstName: string; lastName: string; email: string; handle: string; isFriend: boolean }) {
   if (!currentUserId.value) return;
   
   if (confirm(`Are you sure you want to remove ${user.firstName} ${user.lastName} from your friends?`)) {

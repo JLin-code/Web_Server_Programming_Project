@@ -20,7 +20,7 @@ onMounted(async () => {
   try {
     loading.value = true;
     const response = await userService.getAll();
-    users.value = response.items.map((user: any) => ({
+    users.value = response.items.map((user: { id: number; first_name: string; last_name: string; email: string; handle?: string; role: string }) => ({
       id: user.id,
       firstName: user.first_name,
       lastName: user.last_name,
@@ -36,13 +36,13 @@ onMounted(async () => {
   }
 });
 
-async function editUser(user: any) {
+async function editUser(user: User) {
   console.log('Edit user:', user);
   alert(`Editing user: ${user.firstName} ${user.lastName}`);
   // Implement actual edit functionality
 }
 
-async function deleteUser(user: any) {
+async function deleteUser(user: User) {
   console.log('Delete user:', user);
   if (confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}?`)) {
     try {

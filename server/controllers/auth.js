@@ -84,7 +84,7 @@ router.post('/login', async (req, res, next) => {
             httpOnly: true,
             maxAge: 24 * 60 * 60 * 1000, // 24 hours
             sameSite: 'strict', 
-            secure: process.env.NODE_ENV === 'production' 
+            secure: false // Always use HTTP
         });
         
         // Don't return password in response

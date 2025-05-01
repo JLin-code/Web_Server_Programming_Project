@@ -7,7 +7,6 @@ const fs = require('fs');
 
 // Import controllers
 const { router: authController, authenticateToken } = require('./controllers/auth');
-const productsController = require('./controllers/products');
 const usersController = require('./controllers/users');
 const friendsController = require('./controllers/friends');
 const activitiesController = require('./controllers/activities');
@@ -60,7 +59,6 @@ app.get('/api/v1', (req, res) => {
     version: '1.0',
     endpoints: {
       auth: '/api/v1/auth',
-      products: '/api/v1/products',
       users: '/api/v1/users',
       friends: '/api/v1/friends',
       activities: '/api/v1/activities',
@@ -76,7 +74,6 @@ app.get('/api/health', (req, res) => {
 });
 
 // Protected routes - require authentication
-app.use('/api/v1/products', authenticateToken, productsController);
 app.use('/api/v1/users', authenticateToken, usersController);
 app.use('/api/v1/friends', authenticateToken, friendsController);
 app.use('/api/v1/activities', authenticateToken, activitiesController);

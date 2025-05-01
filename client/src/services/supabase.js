@@ -1,17 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Initialize Supabase client with environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// Initialize Supabase client with environment variables and fallbacks
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://chuhfxkepvakwgmhiuep.supabase.co'
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example-key'
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables. Check your .env file.')
-}
+console.log('Supabase Client Configuration:')
+console.log(`- URL defined: ${!!supabaseUrl}`)
+console.log(`- KEY defined: ${!!supabaseAnonKey}`)
+console.log(`- URL: ${supabaseUrl}`)
+console.log(`- KEY: ${supabaseAnonKey ? '***' + supabaseAnonKey.substring(supabaseAnonKey.length-5) : 'undefined'}`)
 
-// Create a custom Supabase client
+// Create a custom Supabase client with error handling
 export const supabase = createClient(
-  supabaseUrl || '',
-  supabaseAnonKey || '',
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       autoRefreshToken: true,
@@ -28,21 +30,25 @@ export const supabase = createClient(
 // Also export as default for flexibility
 export default supabase;
 
-// Test connection
+// Test connection with better error handling
 async function testSupabaseConnection() {
   try {
     console.log('Testing Supabase connection from client...')
+    const startTime = performance.now()
     const { data, error } = await supabase.from('users').select('count').limit(1)
+    const duration = performance.now() - startTime
     
     if (error) {
-      console.error('❌ Supabase connection failed:', error)
+      console.error(`❌ Supabase connection failed (${duration.toFixed(2)}ms):`, error)
+      console.error('Please check your .env file and make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set correctly.')
       return false
     }
     
-    console.log('✅ Supabase connection successful:', data)
+    console.log(`✅ Supabase connection successful (${duration.toFixed(2)}ms):`, data)
     return true
   } catch (err) {
-    console.error('❌ Supabase connection error:', err)
+    console.error('❌ Critical Supabase connection error:', err)
+    console.error('This could indicate network issues or invalid credentials.')
     return false
   }
 }

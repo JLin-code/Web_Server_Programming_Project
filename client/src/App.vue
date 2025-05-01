@@ -1,20 +1,54 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import NavBar from './components/NavBar.vue'
+import { ref, onMounted, onErrorCaptured } from 'vue'
 
+const hasError = ref(false);
+const errorMessage = ref('');
+const appVersion = '1.0.0'; // Add version for debugging
+
+// Define reloadPage method
+const reloadPage = () => {
+  window.location.reload();
+};
+
+onMounted(() => {
+  console.log(`Fitness Tracker App v${appVersion} initializing...`);
+});
+
+// Add global error handler
+onErrorCaptured((err, instance, info) => {
+  console.error('App error captured:', err);
+  console.error('Error details:', { instance, info });
+  hasError.value = true;
+  errorMessage.value = err instanceof Error ? err.message : 'Unknown application error';
+  return false; // Prevent error from propagating further
+});
 </script>
 
 <template>
   <div class="app-container">
-    <header>
-      <NavBar />
-    </header>
-    <main class="content-container">
-      <RouterView />
-    </main>
-    <footer class="app-footer">
-      <p>© {{ new Date().getFullYear() }} Fitness Tracker</p>
-    </footer>
+    <!-- Error fallback -->
+    <div v-if="hasError" class="error-container">
+      <div class="error-content">
+        <h1>Something went wrong</h1>
+        <p>{{ errorMessage }}</p>
+        <button @click="reloadPage" class="reload-button">Reload Application</button>
+      </div>
+    </div>
+    
+    <!-- Regular app content -->
+    <template v-else>
+      <header>
+        <NavBar />
+      </header>
+      <main class="content-container">
+        <RouterView />
+      </main>
+      <footer class="app-footer">
+        <p>© {{ new Date().getFullYear() }} Fitness Tracker v{{ appVersion }}</p>
+      </footer>
+    </template>
   </div>
 </template>
 
@@ -97,5 +131,44 @@ button:hover, .btn:hover {
 
 .highlight {
   color: var(--highlight);
+}
+
+.error-container {
+  background-color: var(--dark-bg);
+  color: var(--text-primary);
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.error-content {
+  max-width: 500px;
+  padding: 2rem;
+  background-color: var(--dark-secondary);
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.error-content h1 {
+  color: #f14668;
+  margin-bottom: 1rem;
+}
+
+.reload-button {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  margin-top: 1.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.3s ease;
+}
+
+.reload-button:hover {
+  background-color: var(--accent-hover);
 }
 </style>

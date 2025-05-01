@@ -19,6 +19,9 @@ const currentUser = ref({
     email: '',
     isAdmin: false
 });
+const hasError = ref(false);
+const errorMessage = ref('');
+
 
 // Toggles the burger menu visibility
 function toggleBurger() {
@@ -26,45 +29,63 @@ function toggleBurger() {
 }
 
 onMounted(async () => {
-  // Check if logged in via Supabase
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    console.log('NavBar component mounted - initializing...');
+    await loadDemoUsers();
     
-    if (session) {
-      console.log('Supabase session found:', session.user.email);
-      // Get user details from Supabase database
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, email, role')
-        .eq('email', session.user.email)
-        .single();
-        
-      if (userError) {
-        console.error('Error fetching user data from Supabase:', userError);
-        // Fall back to API
-        checkApiUser();
-      } else if (userData) {
-        // Set user from Supabase data
-        isLoggedIn.value = true;
-        currentUser.value.id = userData.id;
-        currentUser.value.email = userData.email;
-        currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
-        // Always set admin to true regardless of actual role
-        currentUser.value.isAdmin = true;
-        
-        console.log('User logged in via Supabase session:', currentUser.value);
+    // Check if logged in via Supabase
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        console.log('Supabase session found:', session.user.email);
+        // Get user details from Supabase database
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, email, role')
+          .eq('email', session.user.email)
+          .single();
+          
+        if (userError) {
+          console.error('Error fetching user data from Supabase:', userError);
+          // Fall back to API
+          await checkApiUser();
+        } else if (userData) {
+          // Set user from Supabase data
+          isLoggedIn.value = true;
+          currentUser.value.id = userData.id;
+          currentUser.value.email = userData.email;
+          currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
+          // Always set admin to true regardless of actual role
+          currentUser.value.isAdmin = true;
+          console.log('User logged in via Supabase session:', currentUser.value);
+        }
+      } else {
+        await checkApiUser();
       }
-    } else {
-      checkApiUser();
+    } catch (error) {
+      console.error('Error checking Supabase session:', error);
+      await checkApiUser();
     }
-  } catch (error) {
-    console.error('Error checking Supabase session:', error);
-    checkApiUser();
+  } catch (err) {
+    console.error('Critical error in NavBar initialization:', err);
+    hasError.value = true;
+    errorMessage.value = err instanceof Error ? err.message : 'Unknown error initializing navigation';
   }
-
-  // Load demo users for login dropdown
-  loadDemoUsers();
 });
+
+// Load demo users for login dropdown
+async function loadDemoUsers() {
+  try {
+    console.log('Loading demo users');
+    demoUsers.value = fallbackUsers.map(user => ({
+      username: user.username,
+      displayName: user.displayName
+    }));
+  } catch (err) {
+    console.error('Error loading demo users:', err);
+  }
+}
 
 async function checkApiUser() {
   try {
@@ -85,57 +106,6 @@ async function checkApiUser() {
   } catch (error) {
     console.warn('API user check failed, using no user state:', error);
     isLoggedIn.value = false;
-  }
-}
-
-async function loadDemoUsers() {
-  try {
-    // First try to get users directly from Supabase
-    const { data: supabaseUsers, error } = await supabase
-      .from('users')
-      .select('email, first_name, last_name, role')
-      .limit(5);
-    
-    if (error) throw error;
-    
-    if (supabaseUsers && supabaseUsers.length > 0) {
-      demoUsers.value = supabaseUsers.map((user: { email: string; first_name: string; last_name: string; role: string }) => ({
-        username: user.email,
-        displayName: `${user.first_name} ${user.last_name} (${user.role === 'admin' ? 'Admin' : 'User'})`
-      }));
-      console.log('Loaded demo users directly from Supabase:', demoUsers.value);
-      return;
-    }
-    
-    // If we got no users, try API
-    fallbackLoadDemoUsers();
-  } catch (error) {
-    console.error('Error loading demo users from Supabase:', error);
-    fallbackLoadDemoUsers();
-  }
-}
-
-async function fallbackLoadDemoUsers() {
-  try {
-    // Try API for demo users
-    const demoUsersResponse = await authService.getUsers();
-    if (demoUsersResponse && demoUsersResponse.users && demoUsersResponse.users.length > 0) {
-      demoUsers.value = demoUsersResponse.users;
-      console.log('Loaded demo users via API');
-    } else {
-      // Use imported fallback users if API returns empty
-      demoUsers.value = fallbackUsers.map(user => ({
-        username: user.username,
-        displayName: user.displayName
-      }));
-      console.log('Using hardcoded fallback users (API returned empty)');
-    }
-  } catch (demoError) {
-    console.error('Failed to load demo users from API, using fallbacks:', demoError);
-    demoUsers.value = fallbackUsers.map(user => ({
-      username: user.username,
-      displayName: user.displayName
-    }));
   }
 }
 
@@ -196,14 +166,10 @@ async function login(username: string, password: string) {
     currentUser.value.id = userData.id;
     currentUser.value.name = `${userData.first_name} ${userData.last_name}`;
     currentUser.value.email = userData.email;
-    // Always set admin to true regardless of actual role
-    currentUser.value.isAdmin = true;
-    isLoggedIn.value = true;
-    isLoginDropdownActive.value = false;
     
     if (attemptedRoute.value) {
       router.push(attemptedRoute.value);
-      attemptedRoute.value = null;
+      attemptedRoute.value = '';
     }
     
     return { success: true };
@@ -335,16 +301,15 @@ async function logout() {
 
 <template>
     <div>
-        <!-- Safe fallback UI in case of catastrophic errors -->
-        <div v-if="false" class="emergency-fallback">
+        <div v-if="hasError" class="emergency-fallback">
             <div class="container has-text-centered">
-                <h1 class="title">Navigation Unavailable</h1>
-                <p>Please try refreshing the page or contact support.</p>
+                <h1 class="title">Navigation Error</h1>
+                <p>There was a problem loading the navigation: {{ errorMessage }}</p>
             </div>
         </div>
 
         <!-- Regular navigation -->
-        <nav class="navbar is-info" role="navigation" aria-label="main navigation" @click.self="closeDropdowns">
+        <nav v-else class="navbar is-info" role="navigation" aria-label="main navigation" @click.self="closeDropdowns">
             <div class="container">
                 <div class="navbar-brand">
                     <a class="navbar-item" @click="router.push('/')">
@@ -544,10 +509,19 @@ async function logout() {
 }
 
 .emergency-fallback {
-    background-color: #3273dc;
-    padding: 1rem;
+    background-color: #f14668;
+    padding: 2rem;
     color: white;
     margin-bottom: 1rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+}
+
+.emergency-fallback .button {
+    margin-top: 1rem;
 }
 
 @media screen and (min-width: 1024px) {

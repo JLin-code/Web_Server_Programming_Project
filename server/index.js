@@ -118,10 +118,12 @@ app.use((err, req, res, next) => {
 
 // Start the server
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api/v1`);
+  console.log(`Server is running on port ${PORT}`);
+  console.log(`http://localhost:${PORT}`);
   
-  if (!clientDistExists) {
+  if (clientDistExists) {
+    console.log('\x1b[32m%s\x1b[0m', `Client app is being served from ${clientDistPath}`);
+  } else {
     console.log('\x1b[33m%s\x1b[0m', 'Note: Client app is not built. Using remote client at https://clientsidewebsite.onrender.com');
   }
 });

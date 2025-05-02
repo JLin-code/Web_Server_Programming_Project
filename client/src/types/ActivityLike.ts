@@ -4,7 +4,3 @@ export interface ActivityLike {
   user_id: string;
   created_at?: string;
 }
-
-// Re-export ActivityLike interface from models
-import { ActivityLike } from './models';
-export type { ActivityLike };

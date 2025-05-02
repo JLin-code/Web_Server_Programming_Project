@@ -1,147 +1,112 @@
-const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+import axios from 'axios';
 
-// Helper function for making fetch requests
-async function fetchApi(endpoint: string, options: RequestInit = {}) {
-  const url = `${API_URL}${endpoint}`;
-  const defaultOptions: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    credentials: 'include' // Important for cookies/sessions
-  };
-  
-  const response = await fetch(url, { ...defaultOptions, ...options });
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-    throw new Error(error.message || `API error: ${response.status}`);
-  }
-  
-  return response.json();
-}
+// Configure axios with default settings
+const api = axios.create({
+  baseURL: '/api/v1',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  withCredentials: true // Important for cookies/auth
+});
 
-// Authentication API
+// Auth service for authentication operations
 export const authService = {
-  login: async (username: string, password: string) => {
-    return fetchApi('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ username, password })
-    });
-  },
-  
-  logout: async () => {
-    return fetchApi('/auth/logout', { method: 'POST' });
-  },
-  
-  getCurrentUser: async () => {
-    return fetchApi('/auth/me');
-  },
-  
-  register: async (userData: any) => {
-    return fetchApi('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData)
-    });
-  },
-  
-  getUsers: async () => {
+  async login(username: string, password: string) {
     try {
-      return await fetchApi('/auth/demo-users');
+      const response = await api.post('/auth/login', { username, password });
+      return response.data;
     } catch (error) {
-      console.error('Error in getUsers:', error);
-      // Return a fallback if server is unreachable
-      return { 
-        success: false, 
-        users: [{ username: 'Admin', displayName: 'Admin (Fallback)' }] 
+      console.error('Login error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Login failed'
+      };
+    }
+  },
+
+  async logout() {
+    try {
+      const response = await api.post('/auth/logout');
+      return response.data;
+    } catch (error) {
+      console.error('Logout error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Logout failed'
+      };
+    }
+  },
+
+  async getCurrentUser() {
+    try {
+      const response = await api.get('/auth/current-user');
+      return response.data;
+    } catch (error) {
+      console.error('Get current user error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get current user'
+      };
+    }
+  },
+
+  async getDemoUsers() {
+    try {
+      const response = await api.get('/auth/demo-users');
+      return response.data;
+    } catch (error) {
+      console.error('Get demo users error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get demo users',
+        users: []
       };
     }
   }
 };
 
-// Users API
+// User service for user-related operations
 export const userService = {
-  getAll: async () => {
-    return fetchApi('/users');
+  async getUsers() {
+    try {
+      const response = await api.get('/users');
+      return response.data;
+    } catch (error) {
+      console.error('Get users error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get users',
+        items: []
+      };
+    }
   },
-  
-  getById: async (id: string | number) => {
-    return fetchApi(`/users/${id}`);
+
+  async getUserById(id: string) {
+    try {
+      const response = await api.get(`/users/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Get user ${id} error:`, error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get user'
+      };
+    }
   },
-  
-  create: async (userData: any) => {
-    return fetchApi('/users', {
-      method: 'POST',
-      body: JSON.stringify(userData)
-    });
-  },
-  
-  update: async (id: string | number, userData: any) => {
-    return fetchApi(`/users/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(userData)
-    });
-  },
-  
-  delete: async (id: string | number) => {
-    return fetchApi(`/users/${id}`, { method: 'DELETE' });
-  },
-  
-  // Add getCurrentUser method that uses the auth endpoint
-  getCurrentUser: async () => {
-    return fetchApi('/auth/me');
+
+  async updateUser(id: string, userData: Record<string, string | number | boolean>) {
+    try {
+      const response = await api.put(`/users/${id}`, userData);
+      return response.data;
+    } catch (error) {
+      console.error(`Update user ${id} error:`, error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to update user'
+      };
+    }
   }
 };
 
-// Products API
-export const productService = {
-  getAll: async () => {
-    return fetchApi('/products');
-  },
-  
-  getById: async (id: string | number) => {
-    return fetchApi(`/products/${id}`);
-  },
-  
-  create: async (productData: any) => {
-    return fetchApi('/products', {
-      method: 'POST',
-      body: JSON.stringify(productData)
-    });
-  },
-  
-  update: async (id: string | number, productData: any) => {
-    return fetchApi(`/products/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(productData)
-    });
-  },
-  
-  delete: async (id: string | number) => {
-    return fetchApi(`/products/${id}`, { method: 'DELETE' });
-  }
-};
-
-// Friends API
-export const friendService = {
-  getFriends: async (userId: string | number) => {
-    return fetchApi(`/friends/${userId}`);
-  },
-  
-  addFriend: async (userId: string | number, friendId: string | number) => {
-    return fetchApi(`/friends/${userId}/add/${friendId}`, { method: 'POST' });
-  },
-  
-  removeFriend: async (userId: string | number, friendId: string | number) => {
-    return fetchApi(`/friends/${userId}/remove/${friendId}`, { method: 'DELETE' });
-  }
-};
-
-// Global error handler for fetch
-window.addEventListener('unhandledrejection', (event) => {
-  if (event.reason instanceof Error && event.reason.message.includes('API error: 401')) {
-    console.error('Authentication error');
-    // You can add logic to redirect to login page here
-  }
-});
-
-export default { authService, userService, productService, friendService };
+// Export the configured axios instance for other services
+export default api;

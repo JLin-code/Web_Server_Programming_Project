@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { authService } from '../services/auth'
+import { authService } from '../services/api'
 import axios from 'axios'
-import type { User } from '../types/User'
+
+// Define the User interface locally since we're no longer importing it
+interface User {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+  created_at?: string;
+}
 
 // Create a properly typed axios client
 const apiClient = axios.create({

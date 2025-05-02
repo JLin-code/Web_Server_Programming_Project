@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import HomeView from '../views/HomeView.vue';
-import PeopleSearchView from '../views/PeopleSearchView.vue';
-import MyActivityView from '../views/MyActivityView.vue';
-import ManageUsersView from '../views/ManageUsersView.vue';
-import SignUpView from '../views/SignUpView.vue';
-import FriendsActivityView from '../views/FriendsActivityView.vue';
+import HomeView from '../pages/HomeView.vue';
+import PeopleSearchView from '../pages/PeopleSearchView.vue';
+import MyActivityView from '../pages/MyActivityView.vue';
+import ManageUsersView from '../pages/ManageUsersView.vue';
+import SignUpView from '../pages/SignUpView.vue';
+import FriendsActivityView from '../pages/FriendsActivityView.vue';
 const router = createRouter({
     history: createWebHistory(''),
     routes: [

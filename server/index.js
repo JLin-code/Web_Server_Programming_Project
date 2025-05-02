@@ -104,12 +104,30 @@ app.get('*', (req, res, next) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error('Server Error:', err);
+  
+  // Determine if the error is JSON-related
+  const isJsonSyntaxError = err instanceof SyntaxError && 
+    err.status === 400 && 
+    'body' in err;
+  
+  if (isJsonSyntaxError) {
+    return res.status(400).json({
+      status: 400,
+      message: 'Invalid JSON payload',
+      details: err.message
+    });
+  }
+  
+  // Handle other types of errors
   const status = err.status || 500;
   const error = {
     status,
     message: err.message || 'Internal Server Error',
+    // Add stack trace in development only
+    ...(process.env.NODE_ENV !== 'production' ? { stack: err.stack } : {})
   };
+  
   res.status(status).json(error);
 });
 

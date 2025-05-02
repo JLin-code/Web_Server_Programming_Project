@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import HomeView from '../pages/HomeView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -12,22 +12,22 @@ const router = createRouter({
     {
       path: '/my-activity',
       name: 'my-activity',
-      component: () => import('../views/MyActivityView.vue')
+      component: () => import('../pages/MyActivityView.vue')
     },
     {
       path: '/friend-activity',
       name: 'friend-activity',
-      component: () => import('../views/FriendsActivityView.vue')
+      component: () => import('../pages/FriendsActivityView.vue')
     },
     {
       path: '/signup',
       name: 'signup',
-      component: () => import('../views/SignUpView.vue')
+      component: () => import('../pages/SignUpView.vue')
     },
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
-      component: () => import('../views/NotFoundView.vue')
+      component: () => import('../pages/NotFoundView.vue')
     }
   ]
 })

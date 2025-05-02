@@ -15,8 +15,7 @@ interface User {
 
 // Create a properly typed axios client
 const apiClient = axios.create({
-  // Fix the baseURL to prevent double /v1/v1/ in requests
-  baseURL: import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -58,8 +57,7 @@ const fetchStatistics = async () => {
     loading.value = true
     error.value = null
     
-    // Use the correct path with no double /v1/v1/
-    const response = await apiClient.get('/v1/data/statistics/global').catch(() => {
+    const response = await apiClient.get('/data/statistics/global').catch(() => {
       console.warn('API call failed, using fallback data');
       return { data: null };
     });

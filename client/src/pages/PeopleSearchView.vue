@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { userService } from '../services/api';
-import { friendsService } from '../services/friendsApi';
+import { userService, friendService } from '../services/api';
 
 const page = 'People Search';
 
@@ -17,25 +16,25 @@ const users = ref<{
 const loading = ref(true);
 const error = ref('');
 const searchQuery = ref('');
-const currentUserId = ref<number | null>(null);
+const currentUserId = ref(null);
 
 onMounted(async () => {
   try {
     loading.value = true;
     
     // Get current user
-    const userResponse = await userService.getUserById('current'); // Replace 'current' with the appropriate identifier for the current user
+    const userResponse = await userService.getCurrentUser();
     if (userResponse && userResponse.user) {
       currentUserId.value = userResponse.user.id;
     }
     
     // Get all users
-    const response = await userService.getUsers();
+    const response = await userService.getAll();
     
     // Get friends
     let friendIds = new Set();
     if (currentUserId.value !== null) {
-      const friendsResponse = await friendsService.getFriends(currentUserId.value.toString());
+      const friendsResponse = await friendService.getFriends(currentUserId.value);
       friendIds = new Set(friendsResponse.items.map((friend: { id: number }) => friend.id));
     }
     
@@ -75,7 +74,7 @@ async function addFriend(user: { id: number; firstName: string; lastName: string
   try {
     if (!currentUserId.value) return;
     
-    await friendsService.sendFriendRequest(currentUserId.value.toString(), user.id.toString());
+    await friendService.addFriend(currentUserId.value, user.id);
     user.isFriend = true;
     console.log(`Added ${user.firstName} as friend`);
   } catch (err) {
@@ -88,7 +87,7 @@ async function removeFriend(user: { id: number; firstName: string; lastName: str
   
   if (confirm(`Are you sure you want to remove ${user.firstName} ${user.lastName} from your friends?`)) {
     try {
-      await friendsService.removeFriend(currentUserId.value.toString(), user.id.toString());
+      await friendService.removeFriend(currentUserId.value, user.id);
       user.isFriend = false;
       console.log(`Removed ${user.firstName} from friends`);
     } catch (err) {

@@ -75,7 +75,7 @@ const fallbackActivities: Activity[] = [
   }
 ];
 
-// Sample users for fallback usage
+// Sample users for fallback usage - minimal data, no hardcoded personal info
 const fallbackUsers: User[] = [
   {
     id: 'fallback-id-admin',
@@ -86,20 +86,12 @@ const fallbackUsers: User[] = [
     created_at: '2023-01-01T00:00:00Z'
   },
   {
-    id: 'fallback-id-john',
-    first_name: 'John',
-    last_name: 'Doe',
-    email: 'john.doe@example.com',
+    id: 'fallback-id-user',
+    first_name: 'Regular',
+    last_name: 'User',
+    email: 'user@example.com',
     role: 'user',
     created_at: '2023-01-02T00:00:00Z'
-  },
-  {
-    id: 'fallback-id-jane',
-    first_name: 'Jane',
-    last_name: 'Smith',
-    email: 'jane.smith@example.com',
-    role: 'user',
-    created_at: '2023-01-03T00:00:00Z'
   }
 ];
 

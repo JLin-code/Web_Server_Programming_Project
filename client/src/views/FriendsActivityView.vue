@@ -23,7 +23,7 @@ const formatDate = (dateString: string) => {
 const deleteActivity = async (id: number) => {
   try {
     await activitiesService.delete(id);
-    activities.value = activities.value.filter(a => a.id !== id);
+    activities.value = activities.value.filter(a => Number(a.id) !== id);
   } catch (err) {
     console.error('Failed to delete activity:', err);
     error.value = 'Failed to delete activity';
@@ -67,12 +67,17 @@ onMounted(async () => {
         <div v-for="activity in activities" :key="activity.id" class="activity-card card">
           <div class="delete-button" @click="deleteActivity(Number(activity.id))">✕</div>
           <div class="user-info">
-            <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
+            <!-- Use a fallback avatar URL if user.avatar doesn't exist -->
+            <img 
+              :src="activity.user?.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(activity.user?.name || 'User')" 
+              :alt="activity.user?.name || 'User'" 
+              class="user-avatar"
+            >
             <div>
               <h3 class="user-name">
-                {{ activity.user.name }}
+                {{ activity.user?.name || 'Anonymous User' }}
               </h3>
-              <span class="activity-date">{{ formatDate(activity.date) }}</span>
+              <span class="activity-date">{{ formatDate(activity.created_at) }}</span>
             </div>
           </div>
           

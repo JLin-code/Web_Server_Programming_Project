@@ -15,7 +15,7 @@ export interface Activity {
   title: string;
   description: string;
   type: string;
-  metrics: Record<string, any>;
+  metrics: Record<string, number | string | boolean>;
   likes: number;
   comments: number;
   image?: string;
@@ -25,6 +25,7 @@ export interface Activity {
     name: string;
     email: string;
     role?: string;
+    avatar?: string; // Added avatar property to fix TypeScript error
   };
   comments_list?: ActivityComment[];
 }

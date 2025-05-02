@@ -1,32 +1,36 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
-import NavBar from './components/NavBar.vue'
 import { ref, onMounted, onErrorCaptured } from 'vue'
+import NavBar from './components/NavBar.vue'
 
-const hasError = ref(false);
-const errorMessage = ref('');
-const appVersion = '1.0.0'; // Add version for debugging
-const debug = ref(true); // Add debug flag
+// App version
+const appVersion = '1.0.0'
 
-// Define reloadPage method
+// Debug mode - helpful for local development
+const debug = ref(true)
+
+// Error handling
+const hasError = ref(false)
+const errorMessage = ref('An unknown error occurred')
+
+// Error handling
+onErrorCaptured((err, instance, info) => {
+  console.error('App error captured:', err, info)
+  hasError.value = true
+  errorMessage.value = err.message || 'An unexpected error occurred'
+  return false // Prevent error propagation
+})
+
+// Reload page functionality
 const reloadPage = () => {
-  window.location.reload();
-};
+  window.location.reload()
+}
 
 onMounted(() => {
-  console.log(`Fitness Tracker App v${appVersion} initializing...`);
-  console.log('Debug mode:', debug.value);
-  console.log('Error state:', hasError.value);
-});
-
-// Add global error handler
-onErrorCaptured((err, instance, info) => {
-  console.error('App error captured:', err);
-  console.error('Error details:', { instance, info });
-  hasError.value = true;
-  errorMessage.value = err instanceof Error ? err.message : 'Unknown application error';
-  return false; // Prevent error from propagating further
-});
+  console.log('App mounted')
+  // Force hasError to false on app mount to ensure content displays
+  hasError.value = false
+})
 </script>
 
 <template>

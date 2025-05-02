@@ -29,27 +29,41 @@ const filteredActivities = computed(() => {
 });
 
 // Delete activity function
-const deleteActivity = async (id: number) => {
+const deleteActivity = async (id: string | number) => {
   try {
     await activitiesService.delete(id);
-    activities.value = activities.value.filter(a => a.id !== id);
+    activities.value = activities.value.filter(a => String(a.id) !== String(id));
   } catch (err) {
     console.error('Failed to delete activity:', err);
     error.value = 'Failed to delete activity';
+    setTimeout(() => { error.value = ''; }, 3000); // Clear error after 3 seconds
   }
 };
 
 // Add a like function to handle activity likes
-const likeActivity = async (id: number) => {
+const likeActivity = async (id: string | number) => {
   try {
-    const activity = activities.value.find(a => a.id === id);
+    const activity = activities.value.find(a => String(a.id) === String(id));
     if (!activity) return;
     
-    await activitiesService.update(id, { likes: activity.likes + 1 });
-    activity.likes++;
+    // Try to use the dedicated like method if available
+    try {
+      if (activitiesService.like) {
+        await activitiesService.like(id);
+      } else {
+        await activitiesService.update(id, { likes: (activity.likes || 0) + 1 });
+      }
+    } catch (likeErr) {
+      console.warn('Like method failed, falling back to update', likeErr);
+      await activitiesService.update(id, { likes: (activity.likes || 0) + 1 });
+    }
+    
+    // Update the UI
+    activity.likes = (activity.likes || 0) + 1;
   } catch (err) {
     console.error('Failed to like activity:', err);
     error.value = 'Failed to like activity';
+    setTimeout(() => { error.value = ''; }, 3000);
   }
 };
 
@@ -93,6 +107,15 @@ const toggleAddForm = () => {
 
 const handleActivityAdded = () => {
   showAddForm.value = false;
+  // Reload activities
+  loading.value = true;
+  activitiesService.getAll().then(response => {
+    activities.value = response.items || [];
+    loading.value = false;
+  }).catch(err => {
+    console.error('Failed to refresh activities:', err);
+    loading.value = false;
+  });
 };
 </script>
 
@@ -128,14 +151,14 @@ const handleActivityAdded = () => {
       
       <div v-else class="activities-list">
         <div v-for="activity in filteredActivities" :key="activity.id" class="activity-card card">
-          <div class="delete-button" @click="deleteActivity(Number(activity.id))">✕</div>
+          <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
           <div class="user-info">
             <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
             <div>
               <h3 class="user-name">
                 {{ activity.user.name }}
               </h3>
-              <span class="activity-date">{{ formatDate(activity.date) }}</span>
+              <span class="activity-date">{{ formatDate(activity.created_at || activity.date) }}</span>
             </div>
           </div>
           
@@ -157,12 +180,12 @@ const handleActivityAdded = () => {
           
           <div class="activity-engagement">
             <div class="engagement-stats">
-              <span>{{ activity.likes }} likes</span>
-              <span>{{ activity.comments }} comments</span>
+              <span>{{ activity.likes || 0 }} likes</span>
+              <span>{{ activity.comments || 0 }} comments</span>
             </div>
             
             <div class="engagement-actions">
-              <button class="engagement-btn" @click="likeActivity(Number(activity.id))">
+              <button class="engagement-btn" @click="likeActivity(activity.id)">
                 👍 Like
               </button>
               <button class="engagement-btn">

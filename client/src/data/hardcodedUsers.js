@@ -1,40 +1,18 @@
 /**
- * Hardcoded users for login dropdown when database connection isn't working
+ * User data is no longer stored in the client for security purposes.
+ * All user data is managed exclusively on the server side.
+ * 
+ * This file exists only for backwards compatibility with existing imports.
+ * Consider refactoring any code that imports from this file.
  */
-export const demoUsers = [
-  { 
-    username: 'john.doe@example.com', 
-    displayName: 'John Doe (User)',
-    firstName: 'John',
-    lastName: 'Doe',
-    role: 'user'
-  },
-  { 
-    username: 'jane.smith@example.com', 
-    displayName: 'Jane Smith (User)',
-    firstName: 'Jane',
-    lastName: 'Smith',
-    role: 'user'
-  },
-  { 
-    username: 'admin@example.com', 
-    displayName: 'Michael Brown (Admin)',
-    firstName: 'Michael',
-    lastName: 'Brown',
-    role: 'admin'
-  },
-  { 
-    username: 'emily.johnson@example.com', 
-    displayName: 'Emily Johnson (User)',
-    firstName: 'Emily',
-    lastName: 'Johnson',
-    role: 'user'
-  },
-  { 
-    username: 'david.wilson@example.com', 
-    displayName: 'David Wilson (User)',
-    firstName: 'David',
-    lastName: 'Wilson',
-    role: 'user'
-  }
-];
+
+// Empty array - NO client-side user data for security
+export const demoUsers = [];
+
+// Export a deprecation notice function
+export const getDemoUsers = () => {
+  console.warn('WARNING: getDemoUsers() is deprecated. Use AuthService.getDemoUsers() instead.');
+  return { success: false, message: 'Demo users are only available through the server API', users: [] };
+};
+
+export default demoUsers;

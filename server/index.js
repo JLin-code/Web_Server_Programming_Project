@@ -5,9 +5,9 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
 
-// Import controllers
-const { router: authController, authenticateToken } = require('./controllers/auth');
-const usersController = require('./controllers/users');
+// Import controllers - fix the auth controller import
+const userController = require('./controllers/users');
+const { router: authController, verifyToken } = require('./controllers/auth');  // Import as an object and extract router
 const friendsController = require('./controllers/friends');
 const activitiesController = require('./controllers/activities');
 
@@ -74,9 +74,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // Protected routes - require authentication
-app.use('/api/v1/users', authenticateToken, usersController);
-app.use('/api/v1/friends', authenticateToken, friendsController);
-app.use('/api/v1/activities', authenticateToken, activitiesController);
+app.use('/api/v1/users', verifyToken, userController);
+app.use('/api/v1/friends', verifyToken, friendsController);
+app.use('/api/v1/activities', verifyToken, activitiesController);
 
 // Catch-all route - modified to handle missing client/dist directory properly
 app.get('*', (req, res, next) => {

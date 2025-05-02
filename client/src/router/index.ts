@@ -1,10 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import PeopleSearchView from '../views/PeopleSearchView.vue'
-import MyActivityView from '../views/MyActivityView.vue'
-import ManageUsersView from '../views/ManageUsersView.vue'
-import SignUpView from '../views/SignUpView.vue'
-import FriendsActivityView from '../views/FriendsActivityView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -12,49 +7,29 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView,
-      beforeEnter: (to, from, next) => {
-        console.log('Navigating to home route')
-        next()
-      }
-    },
-    {
-      path: '/friend-activity',
-      name: 'friendActivity',
-      component: FriendsActivityView,
-    },
-    {
-      path: '/friends-activity',
-      name: 'friendsActivity',
-      component: FriendsActivityView,
+      component: HomeView
     },
     {
       path: '/my-activity',
-      name: 'myActivity',
-      component: MyActivityView,
+      name: 'my-activity',
+      component: () => import('../views/MyActivityView.vue')
     },
     {
-      path: '/people-search',
-      name: 'peopleSearch',
-      component: PeopleSearchView,
-    },
-    {
-      path: '/manage-users',
-      name: 'manageUsers',
-      component: ManageUsersView,
+      path: '/friend-activity',
+      name: 'friend-activity',
+      component: () => import('../views/FriendsActivityView.vue')
     },
     {
       path: '/signup',
       name: 'signup',
-      component: SignUpView,
+      component: () => import('../views/SignUpView.vue')
     },
-  ],
-})
-
-// Add global navigation guards for debugging
-router.beforeEach((to, from) => {
-  console.log(`Navigation: ${from.path} → ${to.path}`)
-  return true
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('../views/NotFoundView.vue')
+    }
+  ]
 })
 
 export default router

@@ -1,3 +1,7 @@
-// Re-export User interface from models
-import { User } from './models';
-export type { User };
+export interface User {
+  id: string;
+  name: string;
+  email?: string;
+  isAdmin?: boolean;
+  avatar?: string;
+}

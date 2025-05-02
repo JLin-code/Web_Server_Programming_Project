@@ -123,17 +123,12 @@ export const authService = {
       } catch (supabaseError) {
         console.error('Supabase demo users error:', supabaseError);
         
-        // Return hardcoded fallback
+        // Return minimal fallback info - no hardcoded user data
         return {
-          success: true,
-          users: [
-            { username: 'john.doe@example.com', displayName: 'John Doe (User)' },
-            { username: 'jane.smith@example.com', displayName: 'Jane Smith (User)' },
-            { username: 'admin@example.com', displayName: 'Admin User (Admin)' },
-            { username: 'emily.johnson@example.com', displayName: 'Emily Johnson (User)' },
-            { username: 'david.wilson@example.com', displayName: 'David Wilson (User)' }
-          ],
-          source: 'hardcoded-fallback'
+          success: false,
+          message: 'Could not load users. Please check server connectivity.',
+          users: [],
+          source: 'error-fallback'
         };
       }
     }

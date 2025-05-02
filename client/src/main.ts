@@ -1,27 +1,15 @@
-import { createApp } from 'vue'
-import App from './App.vue'
-import router from './router'
+import "./assets/main.css";
+import { createApp } from "vue";
+import { createPinia } from "pinia"; // Pinia is the official state management library for Vue
+import App from "./App.vue";
+import router from "./router";
 
-import './assets/main.css'
-import '@fortawesome/fontawesome-free/css/all.min.css'
-
-// Add global error handler
-window.onerror = function(message, source, lineno, colno, error) {
-  console.error('Global error caught:', { message, source, lineno, colno, error });
-  return false;
-};
-
-// Create and mount the app with error handling
+// Create the Vue application instance
 const app = createApp(App);
 
-app.config.errorHandler = (err, instance, info) => {
-  console.error('Vue error handler:', err);
-  console.error('Error details:', { instance, info });
-};
-
+// Initialize Pinia for state management across components
+const pinia = createPinia();
+app.use(pinia);
 app.use(router);
 
-// Mount with console logging for debugging
-console.log('Mounting Vue application...');
-app.mount('#app');
-console.log('Vue application mounted');
+app.mount("#app");

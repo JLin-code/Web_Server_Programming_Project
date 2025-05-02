@@ -1,3 +1,12 @@
+/**
+ * User data is no longer stored in the client for security purposes.
+ * All user data is managed exclusively on the server side.
+ * 
+ * This file exists only for backwards compatibility with existing imports.
+ * Consider refactoring any code that imports from this file.
+ */
+
+// User type definition only - for TypeScript type checking
 export interface DemoUser {
   username: string;
   displayName: string;
@@ -6,42 +15,7 @@ export interface DemoUser {
   role: string;
 }
 
-export const demoUsers: DemoUser[] = [
-  {
-    username: 'john.doe@example.com',
-    displayName: 'John Dwefoe (User)',
-    firstName: 'John',
-    lastName: 'Doe',
-    role: 'user'
-  },
-  {
-    username: 'jane.smith@example.com',
-    displayName: 'Jane Smith (User)',
-    firstName: 'Jane',
-    lastName: 'Smith',
-    role: 'user'
-  },
-  {
-    username: 'admin@example.com',
-    displayName: 'Michael Brown (Admin)',
-    firstName: 'Admin',
-    lastName: 'User',
-    role: 'admin'
-  },
-  {
-    username: 'emily.johnson@example.com',
-    displayName: 'Emily Johnson (User)',
-    firstName: 'Emily',
-    lastName: 'Johnson',
-    role: 'user'
-  },
-  {
-    username: 'david.wilson@example.com',
-    displayName: 'David Wilson (User)',
-    firstName: 'David',
-    lastName: 'Wilson',
-    role: 'user'
-  }
-];
+// No hardcoded data - empty array
+export const demoUsers: DemoUser[] = [];
 
 export default demoUsers;

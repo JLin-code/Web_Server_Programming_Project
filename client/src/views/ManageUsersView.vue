@@ -20,6 +20,12 @@ onMounted(async () => {
   try {
     loading.value = true;
     const response = await userService.getAll();
+    
+    if (!response || !response.items) {
+      error.value = 'Invalid server response';
+      return;
+    }
+    
     users.value = response.items.map((user: { id: number; first_name: string; last_name: string; email: string; handle?: string; role: string }) => ({
       id: user.id,
       firstName: user.first_name,
@@ -29,7 +35,7 @@ onMounted(async () => {
       isAdmin: user.role === 'admin'
     }));
   } catch (err) {
-    error.value = 'Failed to load users';
+    error.value = 'Failed to load users from server';
     console.error(err);
   } finally {
     loading.value = false;

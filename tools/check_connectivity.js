@@ -3,12 +3,22 @@ const fetch = require('node-fetch');
 const dns = require('dns');
 const { promisify } = require('util');
 const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
 const resolveDns = promisify(dns.resolve);
 const lookupDns = promisify(dns.lookup);
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+// Define SQL paths to check
+const SQL_PATHS = [
+    path.join(__dirname, '..', 'sql'),
+    path.join(__dirname, '..', 'server', 'sql'),
+    path.join(__dirname, '..', 'database')
+];
 
 async function testNetworkConnectivity() {
     console.log('=============================================');
@@ -32,6 +42,11 @@ async function testNetworkConnectivity() {
     } else {
         console.log(`✅ SUPABASE_KEY is set (length: ${SUPABASE_KEY.length})`);
     }
+
+    console.log(`${SUPABASE_SERVICE_KEY ? '✅' : '❌'} SUPABASE_SERVICE_KEY is ${SUPABASE_SERVICE_KEY ? 'set' : 'not set'}`);
+    
+    // Check for SQL files in the new location
+    await checkSqlFiles();
     
     // Parse URL
     let hostname;
@@ -136,6 +151,74 @@ async function testNetworkConnectivity() {
         console.error('   Details:', err);
         return false;
     }
+}
+
+// Function to check for SQL files in the designated paths
+async function checkSqlFiles() {
+    console.log('\n📂 SQL Files Check:');
+    
+    let totalSqlFiles = 0;
+    let sqlFilesFound = [];
+    
+    for (const dirPath of SQL_PATHS) {
+        if (fs.existsSync(dirPath)) {
+            try {
+                const files = fs.readdirSync(dirPath).filter(file => file.endsWith('.sql'));
+                if (files.length > 0) {
+                    console.log(`✅ Found ${files.length} SQL files in ${dirPath}`);
+                    files.forEach(file => {
+                        const filePath = path.join(dirPath, file);
+                        const stats = fs.statSync(filePath);
+                        console.log(`   - ${file} (${stats.size} bytes)`);
+                        sqlFilesFound.push({ name: file, path: filePath, size: stats.size });
+                    });
+                    totalSqlFiles += files.length;
+                } else {
+                    console.log(`❌ No SQL files found in ${dirPath}`);
+                }
+            } catch (err) {
+                console.error(`❌ Error reading directory ${dirPath}: ${err.message}`);
+            }
+        } else {
+            console.log(`❓ Directory does not exist: ${dirPath}`);
+        }
+    }
+    
+    if (totalSqlFiles === 0) {
+        console.log('\n⚠️ WARNING: No SQL files found in any of the checked directories.');
+        console.log('   Make sure your SQL files are in one of these locations:');
+        SQL_PATHS.forEach(path => console.log(`   - ${path}`));
+        console.log('   Or update this script to include your SQL file location.');
+    } else {
+        console.log(`\n✅ Total SQL files found: ${totalSqlFiles}`);
+    }
+    
+    // Check specifically for the seed_data.sql and create_exec_sql.sql files
+    const criticalFiles = [
+        { name: 'seed_data.sql', found: false },
+        { name: 'create_exec_sql.sql', found: false }
+    ];
+    
+    for (const file of sqlFilesFound) {
+        for (const criticalFile of criticalFiles) {
+            if (file.name === criticalFile.name) {
+                criticalFile.found = true;
+                criticalFile.path = file.path;
+                break;
+            }
+        }
+    }
+    
+    console.log('\n🔍 Critical SQL Files Check:');
+    for (const file of criticalFiles) {
+        if (file.found) {
+            console.log(`✅ ${file.name} found at: ${file.path}`);
+        } else {
+            console.log(`❌ ${file.name} not found in any directory`);
+        }
+    }
+    
+    return sqlFilesFound;
 }
 
 // Run the test

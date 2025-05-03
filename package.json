@@ -9,7 +9,13 @@
     "check-deps": "node tools/check-deps.js",
     "server": "nodemon server/index.js",
     "client": "cd client && pnpm dev",
-    "diagnose": "node tools/diagnose.js"
+    "diagnose": "node tools/diagnose.js",
+    "supabase:diagnose": "node tools/supabase_diagnostics.js",
+    "supabase:check-url": "node tools/supabase_url_checker.js",
+    "supabase:setup": "node tools/setup_db.js",
+    "supabase:test": "node tools/test_supabase.js",
+    "db:setup": "node tools/setup_db.js",
+    "db:create-function": "node -e \"require('fs').readFile('server/tools/create_exec_sql.sql', 'utf8', (err, data) => console.log(data))\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

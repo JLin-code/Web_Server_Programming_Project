@@ -16,6 +16,7 @@ console.log('\n📋 Environment Variables Check:');
 console.log(`API_URL: ${API_URL ? '✅ Set' : '❌ Missing'}`);
 console.log(`SUPABASE_URL: ${SUPABASE_URL ? '✅ Set' : '❌ Missing'}`);
 console.log(`SUPABASE_KEY: ${SUPABASE_KEY ? '✅ Set (length: ' + SUPABASE_KEY.length + ')' : '❌ Missing'}`);
+console.log(`SUPABASE_SERVICE_KEY: ${process.env.SUPABASE_SERVICE_KEY ? '✓ Found' : '✗ Missing'}`);
 
 // Test direct Supabase connection
 async function testSupabaseConnection() {
@@ -26,6 +27,9 @@ async function testSupabaseConnection() {
     
     console.log('\n🔄 Testing direct Supabase connection...');
     
+    const isServiceRole = SUPABASE_KEY.includes('service_role') || 
+                          process.env.SUPABASE_SERVICE_KEY === SUPABASE_KEY;
+
     try {
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
         const startTime = Date.now();

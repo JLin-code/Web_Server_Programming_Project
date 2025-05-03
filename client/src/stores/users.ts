@@ -87,12 +87,14 @@ export const useUsersStore = defineStore('users', () => {
     try {
       const result = await authService.getDemoUsers();
       
-      if (result.success) {
+      if (result.success && Array.isArray(result.users) && result.users.length > 0) {
         demoUsers.value = result.users;
+        console.log('Demo users fetched successfully:', demoUsers.value);
         return true;
       }
       
-      error.value = result.message || 'Failed to fetch demo users';
+      console.warn('No demo users returned from API:', result);
+      error.value = result.message || 'No demo users available from server';
       return false;
     } catch (err) {
       console.error('Error fetching demo users:', err);

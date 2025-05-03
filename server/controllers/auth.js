@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/user');
+const { getAllDemoUsers } = require('../data/demoUsers');
 const router = express.Router();
 
 // Environment variables
@@ -143,18 +144,35 @@ router.get('/current-user', async (req, res) => {
 // Demo users for development - provides dummy users for login form
 router.get('/demo-users', async (req, res) => {
   try {
-    const users = await userModel.getAll();
+    // Try to get users from the database first
+    let demoUsers = [];
+    let source = 'fallback';
     
-    // Map to a safe subset of information for the login form
-    const demoUsers = users.map(user => ({
-      username: user.email, 
-      displayName: `${user.first_name} ${user.last_name} (${user.role === 'admin' ? 'Admin' : 'User'})`
-    }));
+    try {
+      const users = await userModel.getAll();
+      
+      // Map to a safe subset of information for the login form
+      if (users && users.length > 0) {
+        demoUsers = users.map(user => ({
+          username: user.email, 
+          displayName: `${user.first_name} ${user.last_name} (${user.role === 'admin' ? 'Admin' : 'User'})`
+        }));
+        source = 'api';
+      }
+    } catch (dbError) {
+      console.warn('Database error fetching demo users, using fallback:', dbError);
+    }
+    
+    // If no users from database, use our fallback demo users
+    if (demoUsers.length === 0) {
+      demoUsers = getAllDemoUsers();
+      source = 'fallback';
+    }
     
     return res.json({
       success: true,
       users: demoUsers,
-      source: 'api'
+      source: source
     });
     
   } catch (error) {

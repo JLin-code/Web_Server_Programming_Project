@@ -1,0 +1,29 @@
+{
+  "name": "web-server-programming-project",
+  "version": "1.0.0",
+  "description": "Web Server Programming Project",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "check-deps": "node tools/check-deps.js",
+    "server": "nodemon server/index.js",
+    "client": "cd client && pnpm dev",
+    "diagnose": "node tools/diagnose.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "axios": "^1.9.0",
+    "bcryptjs": "^2.4.3",
+    "buefy": "npm:@ntohq/buefy-next@^0.2.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

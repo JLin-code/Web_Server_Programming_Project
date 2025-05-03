@@ -1,21 +1,27 @@
 /**
- * User data is no longer stored in the client for security purposes.
- * All user data is managed exclusively on the server side.
- * 
- * This file exists only for backwards compatibility with existing imports.
- * Consider refactoring any code that imports from this file.
+ * Demo users for development environment
+ * These users are used in the login dropdown when API access fails
  */
-
-// User type definition only - for TypeScript type checking
-export interface DemoUser {
-  username: string;
-  displayName: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-}
-
-// No hardcoded data - empty array
-export const demoUsers: DemoUser[] = [];
-
-export default demoUsers;
+export const demoUsers = [
+  {
+    username: 'admin@example.com',
+    displayName: 'Admin User (Administrator)',
+    firstName: 'Admin',
+    lastName: 'User',
+    isAdmin: true
+  },
+  {
+    username: 'user@example.com',
+    displayName: 'Regular User',
+    firstName: 'Regular',
+    lastName: 'User',
+    isAdmin: false
+  },
+  {
+    username: 'demo@example.com',
+    displayName: 'Demo User',
+    firstName: 'Demo',
+    lastName: 'User',
+    isAdmin: false
+  }
+];

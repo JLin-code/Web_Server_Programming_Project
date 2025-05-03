@@ -69,7 +69,6 @@ onMounted(async () => {
     }
   } catch (err) {
     console.error('Critical error in NavBar initialization:', err);
-    hasError.value = true;
     errorMessage.value = err instanceof Error ? err.message : 'Unknown error initializing navigation';
   }
 });

@@ -15,15 +15,15 @@ interface User {
 
 // Create a properly typed axios client
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || '',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-// Debug flag - set to true to show debugging information
-const isDebug = ref(true);
+// Debug flag - set to false to hide debugging information
+const isDebug = ref(false);
 
 const currentUser = ref<User | null>(null)
 const statistics = ref({
@@ -57,7 +57,7 @@ const fetchStatistics = async () => {
     loading.value = true
     error.value = null
     
-    const response = await apiClient.get('/data/statistics/global').catch(() => {
+    const response = await apiClient.get('/api/v1/data/statistics/global').catch(() => {
       console.warn('API call failed, using fallback data');
       return { data: null };
     });

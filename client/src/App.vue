@@ -6,8 +6,8 @@ import NavBar from './components/NavBar.vue'
 // App version
 const appVersion = '1.0.0'
 
-// Debug mode - helpful for local development
-const debug = ref(true)
+// Debug mode - set to false to hide the debug bar
+const debug = ref(false)
 
 // Error handling
 const hasError = ref(false)
@@ -16,7 +16,8 @@ const errorMessage = ref('An unknown error occurred')
 // Error handling
 onErrorCaptured((err, instance, info) => {
   console.error('App error captured:', err, info)
-  hasError.value = true
+  // Don't set hasError to true unless it's a critical error
+  // hasError.value = true
   errorMessage.value = err.message || 'An unexpected error occurred'
   return false // Prevent error propagation
 })
@@ -35,7 +36,7 @@ onMounted(() => {
 
 <template>
   <div class="app-container">
-    <!-- Debug info when in debug mode -->
+    <!-- Debug info when in debug mode - repositioned to bottom of screen -->
     <div v-if="debug" class="debug-info">
       <strong>DEBUG:</strong> App loaded, error state: {{ hasError }}
     </div>
@@ -184,16 +185,16 @@ button:hover, .btn:hover {
   background-color: var(--accent-hover);
 }
 
-/* Add debugging styles */
+/* Add debugging styles - repositioned to bottom */
 .debug-info {
   background-color: #ffeb3b;
   color: #333;
   padding: 10px;
   position: fixed;
-  top: 0;
+  bottom: 0; /* Changed from top: 0 to bottom: 0 */
   left: 0;
   right: 0;
-  z-index: 9999;
+  z-index: 999; /* Reduced z-index */
   text-align: center;
   font-family: monospace;
 }

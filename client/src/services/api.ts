@@ -2,7 +2,8 @@ import axios from 'axios';
 
 // Configure axios with default settings
 const api = axios.create({
-  baseURL: '/api/v1',
+  // Remove the hardcoded path since it's likely already included in the proxy config
+  baseURL: import.meta.env.VITE_API_URL || '',
   headers: {
     'Content-Type': 'application/json'
   },
@@ -13,7 +14,7 @@ const api = axios.create({
 export const authService = {
   async login(username: string, password: string) {
     try {
-      const response = await api.post('/auth/login', { username, password });
+      const response = await api.post('/api/v1/auth/login', { username, password });
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
@@ -26,7 +27,7 @@ export const authService = {
 
   async logout() {
     try {
-      const response = await api.post('/auth/logout');
+      const response = await api.post('/api/v1/auth/logout');
       return response.data;
     } catch (error) {
       console.error('Logout error:', error);
@@ -39,7 +40,7 @@ export const authService = {
 
   async getCurrentUser() {
     try {
-      const response = await api.get('/auth/current-user');
+      const response = await api.get('/api/v1/auth/current-user');
       return response.data;
     } catch (error) {
       console.error('Get current user error:', error);
@@ -52,7 +53,7 @@ export const authService = {
 
   async getDemoUsers() {
     try {
-      const response = await api.get('/auth/demo-users');
+      const response = await api.get('/api/v1/auth/demo-users');
       return response.data;
     } catch (error) {
       console.error('Get demo users error:', error);
@@ -69,7 +70,7 @@ export const authService = {
 export const userService = {
   async getUsers() {
     try {
-      const response = await api.get('/users');
+      const response = await api.get('/api/v1/users');
       return response.data;
     } catch (error) {
       console.error('Get users error:', error);
@@ -83,7 +84,7 @@ export const userService = {
 
   async getUserById(id: string) {
     try {
-      const response = await api.get(`/users/${id}`);
+      const response = await api.get(`/api/v1/users/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Get user ${id} error:`, error);
@@ -96,13 +97,27 @@ export const userService = {
 
   async updateUser(id: string, userData: Record<string, string | number | boolean>) {
     try {
-      const response = await api.put(`/users/${id}`, userData);
+      const response = await api.put(`/api/v1/users/${id}`, userData);
       return response.data;
     } catch (error) {
       console.error(`Update user ${id} error:`, error);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to update user'
+      };
+    }
+  },
+  
+  // Add delete method for users
+  async delete(id: string) {
+    try {
+      const response = await api.delete(`/api/v1/users/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Delete user ${id} error:`, error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to delete user'
       };
     }
   }

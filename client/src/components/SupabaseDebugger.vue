@@ -1,17 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { supabase } from '../utils/supabaseClient';
+import supabaseClient from '../services'; // Import the actual Supabase client
 
 const connectionStatus = ref('Checking...');
 const errorMessage = ref('');
-const users = ref([]);
+const users = ref<{ id: string; email: string; first_name: string | null; last_name: string | null; role: string | null; }[]>([]);
 const loading = ref(true);
 const debugVisible = ref(true);
 
 async function checkConnection() {
   try {
     const start = performance.now();
-    const { data, error } = await supabase.from('users').select('count');
+    const { error } = await supabaseClient.from('users').select('count');
     const duration = performance.now() - start;
     
     if (error) {
@@ -24,7 +24,7 @@ async function checkConnection() {
     return true;
   } catch (err) {
     connectionStatus.value = 'Error';
-    errorMessage.value = err.message;
+    errorMessage.value = err instanceof Error ? err.message : String(err);
     return false;
   }
 }
@@ -32,7 +32,7 @@ async function checkConnection() {
 async function loadUsers() {
   try {
     loading.value = true;
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from('users')
       .select('id, email, first_name, last_name, role')
       .limit(5);
@@ -41,7 +41,7 @@ async function loadUsers() {
     
     users.value = data || [];
   } catch (err) {
-    errorMessage.value = `Failed to load users: ${err.message}`;
+    errorMessage.value = `Failed to load users: ${err instanceof Error ? err.message : String(err)}`;
   } finally {
     loading.value = false;
   }

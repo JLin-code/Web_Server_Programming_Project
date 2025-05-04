@@ -110,7 +110,7 @@ async function testConnection() {
     // Test the user table specifically
     const { data, error } = await supabase.from('users')
       .select('id, first_name, last_name, email, role')
-      .limit(3);
+      .limit(7);
     
     const hrTime = process.hrtime(startTime);
     const duration = hrTime[0] * 1000 + hrTime[1] / 1000000;

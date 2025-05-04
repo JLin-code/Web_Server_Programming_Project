@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue';
-import { activitiesService } from '../services/activitiesApi';
-import { authService } from '../services/api';
+import { activitiesService, api as authService } from '../services'; // Fixed import
 
 // Define emits
 const emit = defineEmits(['activityAdded', 'cancel']);

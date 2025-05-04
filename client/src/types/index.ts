@@ -2,91 +2,66 @@
 
 export interface User {
   id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  role?: string;
-  profile_picture_url?: string;
-  created_at?: string;
-  last_sign_in?: string;
-}
-
-export interface UserDisplay {
-  id: string;
-  name: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
   email: string;
   role?: string;
   profilePicture?: string;
+  profile_picture_url?: string;
+  created_at?: string;
 }
 
 export interface Activity {
   id: string;
   user_id: string;
+  user?: User;
   title: string;
   description?: string;
   type: string;
-  date: string;
-  image_url?: string;
-  likes: number;
-  comments: number;
+  date?: string;
   created_at: string;
-  updated_at?: string;
-  // Populated fields
-  user?: UserDisplay;
-  commentsList?: Comment[];
+  likes?: number;
+  comments?: unknown[] | number;
+  image_url?: string;
 }
 
 export interface Comment {
   id: string;
-  activity_id: string;
-  user_id: string;
-  comment: string;
+  text: string;
   created_at: string;
-  // Populated fields
-  user?: UserDisplay;
-}
-
-export interface Like {
-  id: string;
-  activity_id: string;
-  user_id: string;
-  created_at: string;
+  user?: User;
 }
 
 export interface Friend {
   id: string;
-  user_id: string;
-  friend_id: string;
-  created_at: string;
-  // Populated fields
-  friend?: UserDisplay;
+  name: string;
+  email?: string;
+  profilePicture?: string;
 }
 
-export interface Statistics {
-  total_users?: number;
-  total_activities?: number;
-  total_comments?: number;
-  total_likes?: number;
-  most_popular_activity_type?: string;
-  activity_type_distribution?: Record<string, number>;
-  average_likes_per_activity?: number;
-  average_comments_per_activity?: number;
-  most_active_user?: {
-    id: string;
-    name: string;
-    count: number;
+export interface StatisticsPeriod {
+  total_activities: number;
+  total_likes_received: number;
+  total_comments_received: number;
+  activity_type_counts?: Record<string, number>;
+}
+
+export interface UserStatistics {
+  user: Partial<User>;
+  today: StatisticsPeriod;
+  week: StatisticsPeriod;
+  month: StatisticsPeriod;
+  all_time: StatisticsPeriod;
+}
+
+export interface GlobalStatistics {
+  total_users: number;
+  periods: {
+    today: { activities: number, comments: number, likes: number };
+    week: { activities: number, comments: number, likes: number };
+    month: { activities: number, comments: number, likes: number };
+    all_time: { activities: number, comments: number, likes: number };
   };
-}
-
-export interface Period {
-  activities: number;
-  comments: number;
-  likes: number;
-}
-
-export interface PeriodStatistics {
-  today: Period;
-  week: Period;
-  month: Period;
-  all_time: Period;
+  activity_type_distribution: Record<string, number>;
 }

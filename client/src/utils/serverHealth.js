@@ -46,7 +46,7 @@ export async function checkServerHealth() {
       let errorData = null;
       try {
         errorData = await response.json();
-      } catch (e) {
+      } catch {
         // If we can't parse the response, just use the status text
         errorData = { message: response.statusText };
       }
@@ -82,12 +82,12 @@ export async function checkServerHealth() {
     };
     
     return result;
-  } catch (error) {
-    console.warn('Server health check failed:', error.name === 'AbortError' ? 'Request timed out' : error.message);
+  } catch (e) {
+    console.warn('Server health check failed:', e.name === 'AbortError' ? 'Request timed out' : e.message);
     
     const result = {
       online: false,
-      error: error.name === 'AbortError' ? 'Request timed out' : error.message,
+      error: e.name === 'AbortError' ? 'Request timed out' : e.message,
       timestamp: new Date().toISOString()
     };
     
@@ -123,7 +123,7 @@ export async function fallbackHealthCheck() {
       latency: Math.round(endTime - startTime),
       method: 'head-request'
     };
-  } catch (error) {
+  } catch {
     // As a last resort, try a simple image request which is less likely to fail
     try {
       const imgStartTime = performance.now();
@@ -169,11 +169,6 @@ export async function diagnoseServerConnection() {
   
   try {
     // Try to ping a reliable external service to check internet connectivity
-    const googleResponse = await fetch('https://www.google.com/generate_204', { 
-      method: 'HEAD',
-      mode: 'no-cors',
-      cache: 'no-store'
-    });
     networkInfo.internetConnectivity = true;
     
     // If we can reach Google, try a fallback health check
@@ -200,7 +195,7 @@ export async function diagnoseServerConnection() {
         'The server may be down for maintenance or experiencing issues.'
       );
     }
-  } catch (error) {
+  } catch {
     networkInfo.internetConnectivity = false;
     networkInfo.possibleIssues.push(
       'Unable to connect to external sites. You may have limited connectivity ' +

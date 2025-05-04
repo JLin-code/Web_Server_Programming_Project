@@ -1,4 +1,4 @@
-import { supabase } from '../services/supabase';
+import { supabase } from '../services'; // Updated to use consolidated services
 import { ref } from 'vue';
 
 /**

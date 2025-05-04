@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { supabase, supabaseActivities } from '../services/supabase';
+import { supabase } from '../utils/supabaseClient';
+import { supabaseActivities } from '../services/supabase';
 import { authService } from '../services/api';
 import { mockDataService } from '../services/mockDataService';
 import { checkServerHealth } from '../utils/serverHealth';
@@ -11,8 +12,9 @@ const currentUser = ref<User | null>(null);
 const activities = ref<Activity[]>([]);
 const loading = ref(true);
 const error = ref('');
+const authRetries = ref(0);
+const MAX_AUTH_RETRIES = 2;
 const showingSampleData = ref(false);
-const retryCount = ref(0);
 
 // Format date helper
 const formatDate = (dateString: string) => {
@@ -25,39 +27,27 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// Get current user
+// Get current user with retry logic - similar to FriendsActivityView approach
 const getCurrentUser = async () => {
   try {
-    loading.value = true;
-    error.value = ''; // Clear any previous errors
-    
-    // Check server connectivity first
-    const serverHealth = await checkServerHealth();
-    if (!serverHealth.online) {
-      console.warn('Server health check failed:', serverHealth);
-      error.value = `Server is offline. ${serverHealth.error || ''}`;
-      await fetchSampleActivities();
-      return;
-    }
-    
-    // Add a timeout to prevent infinite loading
-    const userPromise = authService.getCurrentUser();
-    const timeoutPromise = new Promise<{user: null}>(resolve => 
-      setTimeout(() => resolve({user: null}), 8000)
-    );
-    
-    // Race between the actual request and a timeout
-    const response = await Promise.race([userPromise, timeoutPromise]);
+    console.log('Attempting to get current user in MyActivityView');
+    const response = await authService.getCurrentUser().catch(err => {
+      console.error('Error in getCurrentUser call:', err);
+      return null;
+    });
     
     if (response && response.user) {
+      console.log('User found:', response.user.id);
       currentUser.value = response.user;
       // Once we have the user, get their activities
       await fetchUserActivities();
     } else {
-      // Try to get user from localStorage as fallback
-      try {
-        const localUser = localStorage.getItem('currentUser');
-        if (localUser) {
+      console.warn('No user returned from getCurrentUser');
+      
+      // Try fallback approach - check if user exists in localStorage
+      const localUser = localStorage.getItem('currentUser');
+      if (localUser) {
+        try {
           const parsedUser = JSON.parse(localUser);
           if (parsedUser && parsedUser.id) {
             console.log('Using localStorage user:', parsedUser.id);
@@ -65,93 +55,79 @@ const getCurrentUser = async () => {
             await fetchUserActivities();
             return;
           }
+        } catch (parseErr) {
+          console.error('Error parsing localStorage user:', parseErr);
         }
-      } catch (parseErr) {
-        console.error('Error parsing localStorage user:', parseErr);
       }
       
-      // If still no user, show sample data
-      await fetchSampleActivities();
+      if (authRetries.value < MAX_AUTH_RETRIES) {
+        authRetries.value++;
+        console.log(`Retrying getCurrentUser (${authRetries.value}/${MAX_AUTH_RETRIES})`);
+        setTimeout(getCurrentUser, 1000); // Retry after 1 second
+      } else {
+        // After max retries, use sample activities
+        console.log('Max retries reached, using sample activities');
+        await fetchSampleActivities();
+      }
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error('Failed to get current user:', err);
-    // Improve error message with more context
-    if (err.message && err.message.includes('Proxy error')) {
-      error.value = 'Server is offline. Proxy error: Unable to connect to API server';
-    } else if (err.message && err.message.includes('fetch')) {
-      error.value = 'Network error: Unable to reach the server';
-    } else {
-      error.value = `Failed to authenticate user: ${err.message || 'Unknown error'}`;
-    }
-    loading.value = false;
-    // Try sample data as last resort
+    error.value = 'Unable to authenticate user. Showing sample activities instead.';
     await fetchSampleActivities();
+  } finally {
+    loading.value = false;
   }
 };
 
-// Fetch user activities
+// Fetch user activities - primary function
 const fetchUserActivities = async () => {
   if (!currentUser.value?.id) {
-    error.value = 'User not authenticated';
-    loading.value = false;
+    console.warn('No user ID available for fetchUserActivities');
+    await fetchSampleActivities();
     return;
   }
 
   try {
-    // Check server connectivity before trying to fetch activities
-    const serverHealth = await checkServerHealth();
-    if (!serverHealth.online) {
-      console.warn('Server health check failed before fetching activities:', serverHealth);
-      error.value = `Server is offline. ${serverHealth.error || ''}`;
+    console.log(`Fetching activities for user ${currentUser.value.id}`);
+    
+    // Get activities for the current user
+    const { data: activitiesData, error: activitiesError } = await supabase
+      .from('activities')
+      .select(`
+        *,
+        user:user_id (
+          id, first_name, last_name, email, role, profile_picture_url
+        ),
+        comments:activity_comments (
+          id, user_id, comment, created_at,
+          user:user_id (
+            id, first_name, last_name, profile_picture_url
+          )
+        )
+      `)
+      .eq('user_id', currentUser.value.id)
+      .order('created_at', { ascending: false });
+      
+    if (activitiesError) {
+      console.error("Error fetching user activities:", activitiesError);
       await fetchSampleActivities();
       return;
     }
-
-    // Add timeout to prevent hanging
-    const activityPromise = supabaseActivities.getUserActivities(currentUser.value.id);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Request timed out')), 10000)
-    );
     
-    // Race between the actual request and a timeout
-    const result = await Promise.race([activityPromise, timeoutPromise]);
-    
-    if (result && result.success && result.items && result.items.length > 0) {
-      // Simplify user information to only show name
-      activities.value = result.items.map(activity => ({
-        ...activity,
-        user: {
-          name: 'You', // Simplify user display to just "You" for the current user
-          id: activity.user?.id || currentUser.value?.id
-        }
-      }));
-      showingSampleData.value = false;
-    } else {
-      console.warn('No activities found or empty result:', result);
+    if (!activitiesData || activitiesData.length === 0) {
+      console.warn("No activities found for this user");
       await fetchSampleActivities();
-    }
-  } catch (err: any) {
-    console.error('Failed to load activities:', err);
-    // Enhanced error handling with more specific messages
-    if (err.message && err.message.includes('timeout')) {
-      error.value = 'Request timeout: Server took too long to respond';
-    } else if (err.message && err.message.includes('Proxy error')) {
-      error.value = 'Server is offline. Proxy error: Unable to connect to API server';
-    } else if (err.message && err.message.includes('fetch')) {
-      error.value = 'Network error: Unable to reach the server';
-    } else {
-      error.value = `Failed to load activities: ${err.message || 'Unknown error'}`;
+      return;
     }
     
-    // Check server health to see if it's a connectivity issue
-    checkServerHealth().then(health => {
-      if (!health.online) {
-        error.value = `Server is offline. ${health.error || ''}`;
-      }
-    });
+    console.log(`Found ${activitiesData.length} user activities`);
+    processActivities(activitiesData);
+    showingSampleData.value = false;
+    
+  } catch (err) {
+    console.error('Failed to load user activities:', err);
+    error.value = 'Failed to load your activities. Showing sample data instead.';
     await fetchSampleActivities();
-  } finally {
-    loading.value = false;
   }
 };
 
@@ -161,107 +137,81 @@ const fetchSampleActivities = async () => {
   console.log("Loading sample activities (API is unavailable)");
   
   try {
-    // Get mock activities from the mockDataService
-    let sampleActivities = mockDataService.getDefaultActivities();
+    // Get default activities
+    const allMockActivities = mockDataService.getDefaultActivities();
     
-    // If no mock activities are returned or the function doesn't exist
-    if (!sampleActivities || !Array.isArray(sampleActivities) || sampleActivities.length === 0) {
-      console.log("Creating fallback mock activities");
-      
-      // Generate some basic mock activities as fallback
-      sampleActivities = [
-        {
-          id: 'mock-001',
-          title: 'Morning Run',
-          description: 'Quick 5K run around the park',
-          type: 'running',
-          created_at: new Date().toISOString(),
-          user: {
-            id: 'current-user',
-            name: 'You',
-            profilePicture: 'https://randomuser.me/api/portraits/men/32.jpg'
-          },
-          likes: 5,
-          comments: 2
-        },
-        {
-          id: 'mock-002',
-          title: 'Evening Yoga',
-          description: 'Relaxing yoga session at home',
-          type: 'yoga',
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          user: {
-            id: 'current-user',
-            name: 'You',
-            profilePicture: 'https://randomuser.me/api/portraits/men/32.jpg'
-          },
-          likes: 3,
-          comments: 1
-        }
-      ];
+    if (!allMockActivities || allMockActivities.length === 0) {
+      // Handle empty mock data
+      error.value = 'No sample activities available.';
+      activities.value = [];
+      return;
     }
     
-    // Only modify user name for activities that belong to current user
-    if (currentUser.value && currentUser.value.id) {
-      sampleActivities = sampleActivities.map(activity => {
-        // Only change user name to "You" if this activity belongs to current user
-        if (activity.user && 
-            (activity.user.id === currentUser.value?.id || 
-             activity.user.id === 'mock-user-001' || 
-             activity.user.id === 'current-user')) {
-          return {
-            ...activity,
-            user: {
-              ...activity.user,
-              name: 'You'
-            }
-          };
-        }
-        // Keep original user info for activities from other users
-        return activity;
-      });
-      
-      // Filter to show only current user's activities if we're on My Activities page
-      sampleActivities = sampleActivities.filter(
-        a => a.user && (a.user.id === currentUser.value?.id || 
-                        a.user.id === 'mock-user-001' || 
-                        a.user.id === 'current-user')
-      );
-    }
+    // Create a consistent user profile
+    const user = currentUser.value || {
+      id: 'sample-user',
+      first_name: 'Demo',
+      last_name: 'User',
+      email: 'demo@example.com'
+    };
     
-    activities.value = sampleActivities;
-    error.value = '';
+    const userProfilePicture = currentUser.value?.profilePicture || 
+                              currentUser.value?.profile_picture_url || 
+                              `https://ui-avatars.com/api/?name=${encodeURIComponent(user.first_name || '')}&background=random`;
+    
+    // Filter and modify activities to be from the current user
+    const filteredActivities = allMockActivities.map((activity, index) => ({
+      ...activity,
+      id: activity.id || `sample-${Date.now()}-${index}`,
+      user_id: user.id,
+      user: {
+        id: user.id,
+        name: `${user.first_name} ${user.last_name}`.trim(),
+        email: user.email,
+        profilePicture: userProfilePicture
+      }
+    }));
+    
+    activities.value = filteredActivities;
+    console.log(`Loaded ${activities.value.length} sample activities for current user`);
   } catch (err) {
     console.error('Error loading sample activities:', err);
     activities.value = [];
-    error.value = 'Could not load any activities. Please try again later.';
+    error.value = 'Unable to load any activities.';
   } finally {
     loading.value = false;
   }
+};
+
+// Process activities data into the correct format
+const processActivities = (activitiesData: any[]) => {
+  activities.value = activitiesData.map(activity => ({
+    ...activity,
+    user: activity.user ? {
+      id: activity.user.id,
+      name: `${activity.user.first_name} ${activity.user.last_name}`,
+      email: activity.user.email,
+      role: activity.user.role,
+      profilePicture: activity.user.profile_picture_url
+    } : {
+      id: currentUser.value?.id || 'unknown',
+      name: currentUser.value ? `${currentUser.value.first_name} ${currentUser.value.last_name}` : 'You',
+      email: currentUser.value?.email || '',
+      role: currentUser.value?.role || 'user',
+      profilePicture: currentUser.value?.profilePicture || null
+    },
+    // Convert comments from array to count if needed
+    comments: Array.isArray(activity.comments) ? activity.comments.length : (activity.comments || 0)
+  }));
+  console.log(`Processed ${activities.value.length} activities`);
 };
 
 // Try loading data again
 const retryLoading = async () => {
   loading.value = true;
   error.value = '';
-  retryCount.value++;
-  
-  // First check if the server is online
-  try {
-    const health = await checkServerHealth();
-    if (!health.online) {
-      error.value = `Server is still offline. ${health.error || ''}`;
-      loading.value = false;
-      return;
-    }
-    // If server is online, proceed with regular loading
-    await getCurrentUser();
-  } catch (err) {
-    console.error('Error checking server health during retry:', err);
-    error.value = 'Unable to check server status. Using sample data.';
-    await fetchSampleActivities();
-    loading.value = false;
-  }
+  authRetries.value = 0;
+  await getCurrentUser();
 };
 
 // Like Activity
@@ -301,22 +251,48 @@ const addComment = async (activityId: string, comment: string) => {
   }
 };
 
-// Delete activity
+// Delete activity with better error handling
 const deleteActivity = async (id: string) => {
   try {
-    const { data, error: deleteError } = await supabase
+    if (!currentUser.value?.id) {
+      console.error('Cannot delete activity: User not authenticated');
+      return;
+    }
+    
+    if (id.startsWith('sample-')) {
+      // For sample activities, just remove from the local array
+      activities.value = activities.value.filter(a => a.id !== id);
+      return;
+    }
+    
+    console.log(`Attempting to delete activity ${id} for user ${currentUser.value.id}`);
+    
+    // Try using the service function first
+    try {
+      await supabaseActivities.deleteActivity(id);
+      console.log(`Successfully deleted activity ${id}`);
+      activities.value = activities.value.filter(a => a.id !== id);
+      return;
+    } catch (serviceErr) {
+      console.warn('Service delete failed, falling back to direct query:', serviceErr);
+    }
+    
+    // Fall back to direct query
+    const { error: deleteError } = await supabase
       .from('activities')
       .delete()
       .eq('id', id)
-      .eq('user_id', currentUser.value?.id); // Ensure user can only delete their own activities
+      .eq('user_id', currentUser.value.id); // Ensure user can only delete their own activities
     
-    if (!deleteError) {
-      activities.value = activities.value.filter(a => a.id !== id);
-    } else {
+    if (deleteError) {
       console.error('Failed to delete activity:', deleteError);
+      return;
     }
+    
+    console.log(`Successfully deleted activity ${id}`);
+    activities.value = activities.value.filter(a => a.id !== id);
   } catch (err) {
-    console.error('Failed to delete activity:', err);
+    console.error('Exception when deleting activity:', err);
   }
 };
 
@@ -351,6 +327,7 @@ const getActivityMetrics = (activity: Activity) => {
 };
 
 onMounted(() => {
+  console.log('MyActivityView mounted, initializing...');
   getCurrentUser();
 });
 </script>
@@ -359,7 +336,9 @@ onMounted(() => {
   <main>
     <h1 class="title">{{ page }}</h1>
     
-
+    <div v-if="showingSampleData" class="notification is-warning">
+      <p><strong>Note:</strong> Showing sample data because we couldn't connect to the server.</p>
+    </div>
     
     <div class="activities-container">
       <div v-if="loading" class="loading">
@@ -367,7 +346,7 @@ onMounted(() => {
         <progress class="progress is-primary" max="100"></progress>
       </div>
       
-      <div v-else-if="error" class="error">
+      <div v-else-if="error && activities.length === 0" class="error">
         <div class="error-message">
           <i class="fas fa-exclamation-triangle"></i>
           <p>{{ error }}</p>
@@ -386,12 +365,16 @@ onMounted(() => {
       </div>
       
       <div v-else class="activities-list">
+        <div v-if="error" class="notification is-info">
+          <p>{{ error }}</p>
+        </div>
+        
         <div v-for="activity in activities" :key="activity.id" class="activity-card card">
           <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
           
           <div class="user-info">
             <img 
-              v-if="activity.user?.profilePicture" 
+              v-if="activity.user?.profilePicture"  
               :src="activity.user.profilePicture" 
               :alt="activity.user?.name || 'User'" 
               class="user-avatar"
@@ -407,7 +390,7 @@ onMounted(() => {
           </div>
           
           <div class="activity-content">
-            <h3 class="activity-title">{{ activity.title }}</h3>
+            <h3 class="activity-title">{{ activity.title || 'Activity' }}</h3>
             <p class="activity-description">{{ activity.description }}</p>
             
             <div v-if="activity.image_url" class="activity-image-container">
@@ -520,7 +503,7 @@ onMounted(() => {
   margin-bottom: 0.5rem;
   color: var(--text-primary);
   font-size: 1.4rem;
-  font-weight: 600; 
+  font-weight: 600;
 }
 
 .activity-description {
@@ -716,5 +699,17 @@ onMounted(() => {
 .connection-tip {
   margin-top: 0.5rem;
   font-style: italic;
+}
+
+.notification.is-warning {
+  background-color: #ffd14a;
+  color: #3e2800;
+  margin-bottom: 1.5rem;
+}
+
+.notification.is-info {
+  background-color: #3298dc;
+  color: #fff;
+  margin-bottom: 1.5rem;
 }
 </style>

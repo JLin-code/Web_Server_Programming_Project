@@ -1,6 +1,5 @@
 // Import both real Supabase services and mock services for fallback
 import { userService as mockUserService, activitiesService as mockActivitiesService, friendsService as mockFriendsService, statsService as mockStatsService } from './mockApi';
-import api from './api';
 import { supabaseUsers, supabaseActivities, supabaseFriends, supabaseStats } from './supabase';
 
 // Always attempt to use real Supabase data first, fall back to mock if needed

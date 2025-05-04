@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { supabase, supabaseFriends } from '../services/supabase';
+import { supabase, supabaseFriends, supabaseActivities } from '../services/supabase';
 import { authService } from '../services/api';
 import mockDataService from '../services/mockDataService'; // Fix import to match MyActivityView
 import type { Activity, User } from '../types';
@@ -152,7 +152,6 @@ const fetchFriendsActivities = async () => {
       await fetchAllActivities();
       return;
     }
-    
     console.log(`Found ${activitiesData.length} friend activities`);
     processActivities(activitiesData);
     
@@ -167,7 +166,6 @@ const fetchFriendsActivities = async () => {
 const fetchAllActivities = async () => {
   try {
     console.log("Fetching recent activities from all users as fallback");
-    
     const { data: activitiesData, error: activitiesError } = await supabase
       .from('activities')
       .select(`
@@ -196,11 +194,8 @@ const fetchAllActivities = async () => {
       await fetchSampleActivities();
       return;
     }
-    
     console.log(`Found ${activitiesData.length} activities from all users`);
     processActivities(activitiesData);
-    
-    
   } catch (err) {
     console.error('Failed to load any activities:', err);
     await fetchSampleActivities();
@@ -231,7 +226,6 @@ const processActivities = (activitiesData: any[]) => {
 // Extract metrics from activity for display
 const getActivityMetrics = (activity: Activity) => {
   let metrics: Record<string, string> = {};
-  
   // Add type-specific metrics depending on the activity type
   switch (activity.type?.toLowerCase()) {
     case 'running':
@@ -254,7 +248,6 @@ const getActivityMetrics = (activity: Activity) => {
     default:
       metrics = { duration: '45:00' };
   }
-  
   return metrics;
 };
 
@@ -304,17 +297,14 @@ onMounted(() => {
               <div v-else class="user-avatar-placeholder">
                 <i class="fas fa-user"></i>
               </div>
-              
               <div>
                 <h4 class="user-name">{{ activity.user?.name || 'Unknown User' }}</h4>
                 <p class="activity-date">{{ formatDate(activity.created_at) }}</p>
               </div>
             </div>
-            
             <div class="activity-content">
               <h3 class="activity-title">{{ activity.title }}</h3>
               <p class="activity-description">{{ activity.description }}</p>
-              
               <div v-if="activity.image_url" class="activity-image-container">
                 <img :src="activity.image_url" :alt="activity.title" class="activity-image">
               </div>
@@ -326,7 +316,6 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-            
             <div class="activity-engagement">
               <div class="engagement-stats">
                 <span>{{ activity.likes || 0 }} likes</span>

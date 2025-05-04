@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { supabase, supabaseFriends } from '../services/supabase';
 import { authService } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
 import type { Activity, User } from '../types';
 
 const page = 'Friends Activity';
@@ -9,6 +10,9 @@ const currentUser = ref<User | null>(null);
 const activities = ref<Activity[]>([]);
 const loading = ref(true);
 const error = ref('');
+const authRetries = ref(0);
+const MAX_AUTH_RETRIES = 2;
+const showingSampleData = ref(false);
 
 // Format date helper
 const formatDate = (dateString: string) => {
@@ -21,94 +25,190 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// Get current user
+// Get current user with retry logic
 const getCurrentUser = async () => {
   try {
-    const response = await authService.getCurrentUser();
+    console.log('Attempting to get current user in FriendsActivityView');
+    const response = await authService.getCurrentUser().catch(err => {
+      console.error('Error in getCurrentUser call:', err);
+      return null;
+    });
+    
     if (response && response.user) {
+      console.log('User found:', response.user.id);
       currentUser.value = response.user;
       // Once we have the user, get friends' activities
       await fetchFriendsActivities();
+    } else {
+      console.warn('No user returned from getCurrentUser');
+      
+      // Try fallback approach - check if user exists in localStorage
+      const localUser = localStorage.getItem('currentUser');
+      if (localUser) {
+        try {
+          const parsedUser = JSON.parse(localUser);
+          if (parsedUser && parsedUser.id) {
+            console.log('Using localStorage user:', parsedUser.id);
+            currentUser.value = parsedUser;
+            await fetchFriendsActivities();
+            return;
+          }
+        } catch (parseErr) {
+          console.error('Error parsing localStorage user:', parseErr);
+        }
+      }
+      
+      if (authRetries.value < MAX_AUTH_RETRIES) {
+        authRetries.value++;
+        console.log(`Retrying getCurrentUser (${authRetries.value}/${MAX_AUTH_RETRIES})`);
+        setTimeout(getCurrentUser, 1000); // Retry after 1 second
+      } else {
+        // After max retries, use sample activities
+        console.log('Max retries reached, using sample activities');
+        await fetchSampleActivities();
+      }
     }
   } catch (err) {
     console.error('Failed to get current user:', err);
-    error.value = 'Failed to authenticate user';
-    loading.value = false;
-  }
-};
-
-// Fetch friends' activities
-const fetchFriendsActivities = async () => {
-  if (!currentUser.value?.id) {
-    error.value = 'User not authenticated';
-    loading.value = false;
-    return;
-  }
-
-  try {
-    // Get activities from Supabase
-    const result = await supabaseFriends.getFriendActivities(currentUser.value.id);
-    
-    if (result && result.success && result.items) {
-      activities.value = result.items;
-    } else {
-      error.value = 'No friend activities found';
-    }
-  } catch (err) {
-    console.error('Failed to load friend activities:', err);
-    error.value = 'Failed to load friend activities';
+    error.value = 'Unable to authenticate user. Showing sample activities instead.';
+    await fetchSampleActivities();
   } finally {
     loading.value = false;
   }
 };
 
-// Like Activity
-const likeActivity = async (activityId: string) => {
-  if (!currentUser.value?.id) return;
-  
+// Fallback: Use sample mock activities when all else fails
+const fetchSampleActivities = async () => {
+  showingSampleData.value = true;
+  console.log("Loading sample activities (API is unavailable)");
+  activities.value = mockDataService.getDefaultActivities();
+  error.value = 'Unable to connect to server. Showing sample activities instead.';
+  console.log("Sample data loaded:", activities.value);
+};
+
+// Fetch friends' activities
+const fetchFriendsActivities = async () => {
+  if (!currentUser.value?.id) {
+    console.warn('No user ID available for fetchFriendsActivities');
+    await fetchAllActivities();
+    return;
+  }
+
   try {
-    await supabase
-      .from('activity_likes')
-      .insert([
-        { activity_id: activityId, user_id: currentUser.value.id }
-      ]);
+    console.log(`Fetching activities for friends of user ${currentUser.value.id}`);
     
-    await supabase.rpc('increment_like_count', { act_id: activityId });
-    
-    // Update the activity in the list
-    const activity = activities.value.find(a => a.id === activityId);
-    if (activity) {
-      activity.likes = (activity.likes || 0) + 1;
+    // Get friend IDs first
+    const { data: friendsData, error: friendsError } = await supabase
+      .from('friends')
+      .select('friend_id')
+      .eq('user_id', currentUser.value.id);
+      
+    if (friendsError || !friendsData || friendsData.length === 0) {
+      console.warn("No friends found or error fetching friends:", friendsError);
+      await fetchAllActivities();
+      return;
     }
+    
+    const friendIds = friendsData.map(f => f.friend_id);
+    console.log(`Found ${friendIds.length} friends`);
+    
+    // Get activities from those friends
+    const { data: activitiesData, error: activitiesError } = await supabase
+      .from('activities')
+      .select(`
+        *,
+        user:user_id (
+          id, first_name, last_name, email, role, profile_picture_url
+        ),
+        comments:activity_comments (
+          id, user_id, comment, created_at,
+          user:user_id (
+            id, first_name, last_name, profile_picture_url
+          )
+        )
+      `)
+      .in('user_id', friendIds)
+      .order('created_at', { ascending: false });
+      
+    if (activitiesError || !activitiesData || activitiesData.length === 0) {
+      console.warn("No activities found or error fetching activities:", activitiesError);
+      await fetchAllActivities();
+      return;
+    }
+    
+    console.log(`Found ${activitiesData.length} friend activities`);
+    processActivities(activitiesData);
+    
   } catch (err) {
-    console.error('Failed to like activity:', err);
+    console.error('Failed to load friend activities:', err);
+    error.value = 'Failed to load friend activities. Showing all activities instead.';
+    await fetchAllActivities();
   }
 };
 
-// Add comment
-const addComment = async (activityId: string, comment: string) => {
-  if (!currentUser.value?.id || !comment.trim()) return;
-  
+// Fetch all recent activities
+const fetchAllActivities = async () => {
   try {
-    await supabase
-      .from('activity_comments')
-      .insert([
-        { activity_id: activityId, user_id: currentUser.value.id, comment }
-      ]);
+    console.log("Fetching recent activities from all users as fallback");
     
-    await supabase.rpc('increment_comment_count', { act_id: activityId });
-    
-    // Update the activity in the list
-    const activity = activities.value.find(a => a.id === activityId);
-    if (activity) {
-      activity.comments = (activity.comments || 0) + 1;
+    const { data: activitiesData, error: activitiesError } = await supabase
+      .from('activities')
+      .select(`
+        *,
+        user:user_id (
+          id, first_name, last_name, email, role, profile_picture_url
+        ),
+        comments:activity_comments (
+          id, user_id, comment, created_at,
+          user:user_id (
+            id, first_name, last_name, profile_picture_url
+          )
+        )
+      `)
+      .order('created_at', { ascending: false })
+      .limit(20);
+      
+    if (activitiesError) {
+      console.error("Error fetching all activities:", activitiesError);
+      await fetchSampleActivities();
+      return;
     }
     
-    // Refresh activities to show the new comment
-    fetchFriendsActivities();
+    if (!activitiesData || activitiesData.length === 0) {
+      console.warn("No activities found in database");
+      await fetchSampleActivities();
+      return;
+    }
+    
+    console.log(`Found ${activitiesData.length} activities from all users`);
+    processActivities(activitiesData);
+    
+    
   } catch (err) {
-    console.error('Failed to add comment:', err);
+    console.error('Failed to load any activities:', err);
+    await fetchSampleActivities();
   }
+};
+
+// Process activities data into the correct format
+const processActivities = (activitiesData: any[]) => {
+  activities.value = activitiesData.map(activity => ({
+    ...activity,
+    user: activity.user ? {
+      id: activity.user.id,
+      name: `${activity.user.first_name} ${activity.user.last_name}`,
+      email: activity.user.email,
+      role: activity.user.role,
+      profilePicture: activity.user.profile_picture_url
+    } : {
+      id: 'unknown',
+      name: 'Unknown User',
+      email: '',
+      role: 'user',
+      profilePicture: null
+    }
+  }));
+  console.log(`Processed ${activities.value.length} activities`);
 };
 
 // Extract metrics from activity for display
@@ -142,6 +242,7 @@ const getActivityMetrics = (activity: Activity) => {
 };
 
 onMounted(() => {
+  console.log("FriendsActivityView mounted");
   getCurrentUser();
 });
 </script>
@@ -150,12 +251,17 @@ onMounted(() => {
   <main>
     <h1 class="title">{{ page }}</h1>
     
+    <div v-if="showingSampleData" class="notification is-warning">
+      <p><strong>Note:</strong> Showing sample data because we couldn't connect to the server.</p>
+    </div>
+    
     <div class="activities-container">
       <div v-if="loading" class="loading">
         <p>Loading activities...</p>
+        <progress class="progress is-primary" max="100"></progress>
       </div>
       
-      <div v-else-if="error" class="error">
+      <div v-else-if="error && activities.length === 0" class="error">
         <p>{{ error }}</p>
       </div>
       
@@ -164,65 +270,71 @@ onMounted(() => {
         <p>Add friends to see their activities here!</p>
       </div>
       
-      <div v-else class="activities-list">
-        <div v-for="activity in activities" :key="activity.id" class="activity-card card">
-          <div class="user-info">
-            <img 
-              v-if="activity.user?.profilePicture" 
-              :src="activity.user.profilePicture" 
-              :alt="activity.user?.name" 
-              class="user-avatar"
-            >
-            <div v-else class="user-avatar-placeholder">
-              <i class="fas fa-user"></i>
-            </div>
-            
-            <div>
-              <h4 class="user-name">{{ activity.user?.name }}</h4>
-              <p class="activity-date">{{ formatDate(activity.created_at) }}</p>
-            </div>
-          </div>
-          
-          <div class="activity-content">
-            <h3 class="activity-title">{{ activity.title }}</h3>
-            <p class="activity-description">{{ activity.description }}</p>
-            
-            <div v-if="activity.image_url" class="activity-image-container">
-              <img :src="activity.image_url" :alt="activity.title" class="activity-image">
-            </div>
-            
-            <div class="activity-metrics">
-              <div v-for="(value, key) in getActivityMetrics(activity)" :key="key" class="metric">
-                <span class="metric-value">{{ value }}</span>
-                <span class="metric-label">{{ key }}</span>
+      <div v-else>
+        <div v-if="error" class="notification is-info">
+          <p>{{ error }}</p>
+        </div>
+        
+        <div class="activities-list">
+          <div v-for="activity in activities" :key="activity.id" class="activity-card card">
+            <div class="user-info">
+              <img 
+                v-if="activity.user?.profilePicture" 
+                :src="activity.user.profilePicture" 
+                :alt="activity.user?.name" 
+                class="user-avatar"
+              >
+              <div v-else class="user-avatar-placeholder">
+                <i class="fas fa-user"></i>
+              </div>
+              
+              <div>
+                <h4 class="user-name">{{ activity.user?.name || 'Unknown User' }}</h4>
+                <p class="activity-date">{{ formatDate(activity.created_at) }}</p>
               </div>
             </div>
-          </div>
-          
-          <div class="activity-engagement">
-            <div class="engagement-stats">
-              <span>{{ activity.likes }} likes</span>
-              <span>{{ activity.comments }} comments</span>
+            
+            <div class="activity-content">
+              <h3 class="activity-title">{{ activity.title }}</h3>
+              <p class="activity-description">{{ activity.description }}</p>
+              
+              <div v-if="activity.image_url" class="activity-image-container">
+                <img :src="activity.image_url" :alt="activity.title" class="activity-image">
+              </div>
+              
+              <div class="activity-metrics">
+                <div v-for="(value, key) in getActivityMetrics(activity)" :key="key" class="metric">
+                  <span class="metric-value">{{ value }}</span>
+                  <span class="metric-label">{{ key }}</span>
+                </div>
+              </div>
             </div>
             
-            <div class="engagement-actions">
-              <button class="engagement-btn" @click="likeActivity(activity.id)">
-                👍 Like
-              </button>
-              <button class="engagement-btn">
-                💬 Comment
-              </button>
+            <div class="activity-engagement">
+              <div class="engagement-stats">
+                <span>{{ activity.likes || 0 }} likes</span>
+                <span>{{ activity.comments?.length || 0 }} comments</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+    
+    <pre v-if="showingSampleData && !loading && activities.length > 0" style="background: #333; color: white; padding: 10px; margin-top: 20px; overflow: auto;">
+      Sample data loaded: {{ activities.length }} activities
+      First activity: {{ JSON.stringify(activities[0], null, 2) }}
+    </pre>
   </main>
 </template>
 
 <style scoped>
 .title {
   margin-bottom: 2rem;
+}
+
+.notification {
+  margin-bottom: 1.5rem;
 }
 
 .activities-container {
@@ -236,19 +348,22 @@ onMounted(() => {
 }
 
 .empty-state {
-  background-color: var(--dark-bg);
+  background-color: #2a2a2a;
   border-radius: 8px;
   padding: 3rem;
 }
 
 .empty-state p {
   margin-bottom: 1.5rem;
-  color: var(--text-secondary);
+  color: #a0a0a0;
 }
 
 .activity-card {
   margin-bottom: 1.5rem;
   position: relative;
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  padding: 1.5rem;
 }
 
 .user-info {
@@ -281,11 +396,12 @@ onMounted(() => {
 .user-name {
   margin-bottom: 0.25rem;
   font-size: 1.1rem;
+  color: #ffffff;
 }
 
 .activity-date {
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: #a0a0a0;
 }
 
 .activity-content {
@@ -294,13 +410,14 @@ onMounted(() => {
 
 .activity-title {
   margin-bottom: 0.5rem;
-  color: var(--text-primary);
+  color: #ffffff;
   font-size: 1.4rem;
   font-weight: 600; 
 }
 
 .activity-description {
   margin-bottom: 1rem;
+  color: #e0e0e0;
 }
 
 .activity-metrics {
@@ -310,7 +427,7 @@ onMounted(() => {
   gap: 1.5rem;
   margin-top: 1rem;
   flex-wrap: wrap;
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: #3a3a3a;
   padding: 1rem;
   border-radius: 6px;
   text-align: center;
@@ -326,12 +443,12 @@ onMounted(() => {
 .metric-value {
   font-size: 1.1rem;
   font-weight: bold;
-  color: var(--highlight);
+  color: #4caf50;
 }
 
 .metric-label {
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: #a0a0a0;
   text-transform: capitalize;
 }
 
@@ -364,63 +481,16 @@ onMounted(() => {
   gap: 1rem;
   margin-bottom: 0.75rem;
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: #a0a0a0;
 }
 
-.engagement-actions {
-  display: flex;
-  gap: 1rem;
+.notification.is-warning {
+  background-color: #ffd14a;
+  color: #3e2800;
 }
 
-.engagement-btn {
-  background-color: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.engagement-btn:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
-}
-
-.btn-small {
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-  background-color: var(--accent-color);
-  border: none;
-  color: white;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.btn-small:hover {
-  background-color: var(--highlight);
-}
-
-.delete-button {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 12px;
-  opacity: 0.7;
-  transition: all 0.2s ease;
-}
-
-.delete-button:hover {
-  background: rgba(255, 0, 0, 0.6);
-  opacity: 1;
+.notification.is-info {
+  background-color: #3298dc;
+  color: #fff;
 }
 </style>

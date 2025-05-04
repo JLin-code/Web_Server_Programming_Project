@@ -1,171 +1,140 @@
-<script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
-import { supabase } from '../services/supabase';
-import { logger } from '../utils/debugConfig';
+<template>
+  <div v-if="!isConnected || !isApiOnline" class="connection-status" :class="statusClass">
+    <div class="status-indicator"></div>
+    <span class="status-text">{{ statusText }}</span>
+    <button v-if="showRetry" @click="checkConnections" class="retry-btn">
+      <span class="retry-icon">↻</span> Retry
+    </button>
+  </div>
+</template>
 
-// Component state
-const isVisible = ref(false);
-const status = ref('checking');
-const message = ref('Checking connection...');
-const retryCount = ref(0);
-const interval = ref(null);
+<script>
+import { healthService } from '@/services/api';
 
-// Connection check function
-async function checkConnection() {
-  try {
-    logger.debug('Running connection health check...');
+export default {
+  name: 'ConnectionStatus',
+  data() {
+    return {
+      isConnected: navigator.onLine,
+      isApiOnline: true,
+      isChecking: false,
+      showRetry: false
+    };
+  },
+  computed: {
+    statusClass() {
+      if (!this.isConnected) return 'offline';
+      return this.isApiOnline ? 'online' : 'api-offline';
+    },
+    statusText() {
+      if (this.isChecking) return 'Checking connection...';
+      if (!this.isConnected) return 'You are offline';
+      return this.isApiOnline ? 'Connected' : 'API server is unavailable';
+    }
+  },
+  mounted() {
+    window.addEventListener('online', this.updateConnectionStatus);
+    window.addEventListener('offline', this.updateConnectionStatus);
     
-    const startTime = Date.now();
-    // Try a simple query first
-    const { data, error } = await supabase
-      .from('users')
-      .select('count')
-      .limit(1)
-      .maybeSingle();
+    // Initial check
+    this.checkConnections();
     
-    const latency = Date.now() - startTime;
-    
-    if (error) {
-      status.value = 'error';
-      message.value = error.message || 'Connection issue detected';
-      isVisible.value = true;
-      retryCount.value++;
-    } else {
-      status.value = 'connected';
-      message.value = `Connected (${latency}ms)`;
-      
-      // Only hide after we've confirmed connection is good
-      if (retryCount.value === 0) {
-        isVisible.value = false;
+    // Regular check every 30 seconds
+    this.healthInterval = setInterval(this.checkConnections, 30000);
+  },
+  beforeUnmount() {
+    window.removeEventListener('online', this.updateConnectionStatus);
+    window.removeEventListener('offline', this.updateConnectionStatus);
+    clearInterval(this.healthInterval);
+  },
+  methods: {
+    updateConnectionStatus() {
+      this.isConnected = navigator.onLine;
+      if (this.isConnected) {
+        this.checkApiHealth();
       } else {
-        // Show briefly then hide after successful reconnection
-        isVisible.value = true;
-        setTimeout(() => {
-          isVisible.value = false;
-        }, 2000);
+        this.isApiOnline = false;
+        this.showRetry = true;
+      }
+    },
+    async checkConnections() {
+      this.isChecking = true;
+      this.showRetry = false;
+      this.isConnected = navigator.onLine;
+      
+      if (this.isConnected) {
+        await this.checkApiHealth();
       }
       
-      retryCount.value = 0;
+      this.isChecking = false;
+      this.showRetry = !this.isConnected || !this.isApiOnline;
+    },
+    async checkApiHealth() {
+      try {
+        const health = await healthService.checkApiHealth();
+        this.isApiOnline = health.online;
+      } catch (error) {
+        console.error('Error checking API health:', error);
+        this.isApiOnline = false;
+      }
     }
-  } catch (err) {
-    status.value = 'error';
-    message.value = err.message || 'Connection check failed';
-    isVisible.value = true;
-    retryCount.value++;
   }
-}
-
-// Setup connection monitoring with a timeout to prevent indefinite loading
-onMounted(() => {
-  // Initial check with timeout
-  const initialCheckTimeout = setTimeout(() => {
-    if (status.value === 'checking') {
-      status.value = 'error';
-      message.value = 'Connection check timed out';
-      isVisible.value = true;
-    }
-  }, 5000);
-  
-  // Start the check
-  checkConnection().finally(() => {
-    clearTimeout(initialCheckTimeout);
-  });
-  
-  // Set up periodic checks
-  interval.value = setInterval(() => {
-    if (retryCount.value < 5 || retryCount.value % 10 === 0) {
-      checkConnection();
-    }
-  }, 15000); // Check every 15 seconds
-});
-
-// Clean up
-onBeforeUnmount(() => {
-  if (interval.value) {
-    clearInterval(interval.value);
-    interval.value = null;
-  }
-});
+};
 </script>
-
-<template>
-  <transition name="fade">
-    <div v-if="isVisible" class="connection-status" :class="status">
-      <div class="message">
-        <span v-if="status === 'checking'" class="icon">
-          <i class="fas fa-circle-notch fa-spin"></i>
-        </span>
-        <span v-else-if="status === 'error'" class="icon">
-          <i class="fas fa-exclamation-triangle"></i>
-        </span>
-        <span v-else class="icon">
-          <i class="fas fa-check-circle"></i>
-        </span>
-        {{ message }}
-      </div>
-      <div class="actions">
-        <button v-if="status === 'error'" @click="reconnect" class="button is-small">
-          Reconnect
-        </button>
-        <button @click="isVisible = false" class="button is-small">
-          Dismiss
-        </button>
-      </div>
-    </div>
-  </transition>
-</template>
 
 <style scoped>
 .connection-status {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 14px;
   border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-width: 200px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-  z-index: 1000;
-  color: white;
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  margin-bottom: 10px;
 }
 
-.connection-status.checking {
-  background-color: #3498db;
-}
-
-.connection-status.connected {
-  background-color: #2ecc71;
-}
-
-.connection-status.error {
-  background-color: #e74c3c;
-}
-
-.message {
-  display: flex;
-  align-items: center;
-}
-
-.icon {
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
   margin-right: 8px;
 }
 
-.actions {
-  margin-left: 15px;
+.offline .status-indicator {
+  background-color: #dc3545;
 }
 
-.button {
-  margin-left: 5px;
+.api-offline .status-indicator {
+  background-color: #ffc107;
 }
 
-/* Transitions */
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s, transform 0.3s;
+.online .status-indicator {
+  background-color: #28a745;
 }
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-  transform: translateY(20px);
+
+.status-text {
+  flex: 1;
+}
+
+.retry-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.retry-btn:hover {
+  background-color: #5a6268;
+}
+
+.retry-icon {
+  margin-right: 4px;
+  font-size: 14px;
 }
 </style>

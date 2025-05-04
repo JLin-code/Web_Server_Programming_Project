@@ -5,6 +5,7 @@ import MyActivityView from '../pages/MyActivityView.vue';
 import ManageUsersView from '../pages/ManageUsersView.vue';
 import SignUpView from '../pages/SignUpView.vue';
 import FriendsActivityView from '../pages/FriendsActivityView.vue';
+
 const router = createRouter({
     history: createWebHistory(''),
     routes: [
@@ -42,6 +43,15 @@ const router = createRouter({
             path: '/signup',
             name: 'signup',
             component: SignUpView,
+        },
+        {
+            path: '/workout-stats',
+            name: 'WorkoutStats',
+            component: () => import('../views/WorkoutStats.vue'),
+            meta: {
+                requiresAuth: true,
+                title: 'Workout Statistics'
+            }
         },
     ],
 });

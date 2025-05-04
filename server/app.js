@@ -39,6 +39,7 @@ const friendsController = require('./controllers/friends'); // Use real friends 
 const authController = require('./controllers/auth');
 const systemController = require('./controllers/system');
 const dbTestController = require('./controllers/dbTestController');
+const healthController = require('./controllers/health'); // Import health controller
 
 // For backward compatibility, keep hardcoded controllers available
 const hardcodedUsersController = require('./controllers/hardcodedUsers');
@@ -101,6 +102,7 @@ app.use('/api/v1/demo', hardcodedUsersController);
 app.use('/api/v1/demo/activities', hardcodedActivitiesController);
 app.use('/api/v1/demo/friends', hardcodedFriendsController);
 app.use('/api/v1/auth', authController);
+app.use('/api/v1/health', healthController); // Register health controller route
 
 // Add real data Supabase controllers
 app.use('/api/v1/users', usersController);

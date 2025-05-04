@@ -29,9 +29,9 @@ axios.interceptors.response.use(
   }
 );
 
-// Configure axios with default settings
+// Create a base API instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: '/api/v1',
   headers: {
     'Content-Type': 'application/json'
   },
@@ -137,10 +137,49 @@ export const authService = {
   
   getCurrentUser: async () => {
     try {
-      const response = await api.get('/api/v1/auth/current-user');
-      return response.data;
+      // Add retry logic for connection refused errors
+      let retries = 2;
+      let lastError = null;
+      
+      while (retries >= 0) {
+        try {
+          console.log(`Attempting to get current user (${retries} retries left)`);
+          const response = await api.get('/auth/current-user');
+          return response.data;
+        } catch (err) {
+          lastError = err;
+          // Only retry on connection errors
+          if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
+            retries--;
+            if (retries >= 0) {
+              console.log(`Connection failed, retrying ${retries} more times...`);
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+              continue;
+            }
+          } else {
+            break; // Don't retry on non-connection errors
+          }
+        }
+      }
+      
+      console.error('Get current user error:', lastError);
+      
+      // If server is down, return a standardized offline response
+      if (lastError && (lastError.code === 'ECONNREFUSED' || lastError.code === 'ERR_NETWORK')) {
+        console.warn('API server appears to be offline');
+        return {
+          success: false,
+          message: 'API server is offline or unreachable',
+          offline: true
+        };
+      }
+      
+      return {
+        success: false,
+        message: lastError instanceof Error ? lastError.message : 'Failed to get current user'
+      };
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error('Unexpected error in getCurrentUser:', error);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get current user'
@@ -155,7 +194,7 @@ export const authService = {
 export const userService = {
   getUsers: async () => {
     try {
-      const response = await api.get('/api/v1/users');
+      const response = await api.get('/users');
       return response.data;
     } catch (error) {
       console.error('Get users error:', error);
@@ -169,7 +208,7 @@ export const userService = {
   
   getUserById: async (id) => {
     try {
-      const response = await api.get(`/api/v1/users/${id}`);
+      const response = await api.get(`/users/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Get user ${id} error:`, error);
@@ -182,7 +221,7 @@ export const userService = {
   
   updateUser: async (id, userData) => {
     try {
-      const response = await api.put(`/api/v1/users/${id}`, userData);
+      const response = await api.put(`/users/${id}`, userData);
       return response.data;
     } catch (error) {
       console.error(`Update user ${id} error:`, error);
@@ -195,13 +234,45 @@ export const userService = {
   
   delete: async (id) => {
     try {
-      const response = await api.delete(`/api/v1/users/${id}`);
+      const response = await api.delete(`/users/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Delete user ${id} error:`, error);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to delete user'
+      };
+    }
+  }
+};
+
+// Health service for API health checks
+export const healthService = {
+  checkApiHealth: async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      const response = await fetch('/api/v1/health', {
+        method: 'GET',
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      return {
+        online: response.ok,
+        status: response.status,
+        statusText: response.statusText,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.warn('API health check failed:', error);
+      return {
+        online: false,
+        error: error.name === 'AbortError' ? 'Request timed out' : error.message,
+        timestamp: new Date().toISOString()
       };
     }
   }

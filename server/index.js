@@ -137,23 +137,25 @@ app.get('/api/v1', (req, res) => {
 });
 
 // Public routes
-app.use('/api/v1/auth', authController);
+app.use('/api/v1/auth', authController.router);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'UP', timestamp: new Date() });
 });
 
 // Register API routes
-app.use('/api/v1/auth', authController);
+app.use('/api/v1/auth', authController.router);
 app.use('/api/v1/users', usersController);
 app.use('/api/v1/activities', activitiesController);
 app.use('/api/v1/friends', friendsController);
 app.use('/api/v1/comments', commentsController);
-if (systemController) app.use('/api', systemController);
+if (systemController && typeof systemController === 'function') {
+  app.use('/api', systemController);
+}
 
 // Protected routes - require authentication
-app.use('/api/v1/users', verifyToken, usersController);
-app.use('/api/v1/friends', verifyToken, friendsController);
-app.use('/api/v1/activities', verifyToken, activitiesController);
+app.use('/api/v1/users', authController.verifyToken, usersController);
+app.use('/api/v1/friends', authController.verifyToken, friendsController);
+app.use('/api/v1/activities', authController.verifyToken, activitiesController);
 
 // Catch-all route - modified to handle missing client/dist directory properly
 app.get('*', (req, res, next) => {

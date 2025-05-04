@@ -11,13 +11,16 @@
     "type-check": "vue-tsc --noEmit --skipLibCheck",
     "type-check-alt": "node vue-tsc-temp-fix.js",
     "lint": "eslint . --fix",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "debug:connection": "vite --mode development build src/debug-connection.js --outDir ./debug-output && node ./debug-output/debug-connection.js",
+    "check:env": "node check-env.js"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.15.4",
     "@supabase/supabase-js": "^2.49.4",
     "axios": "^1.9.0",
     "bulma": "^1.0.3",
+    "dotenv": "^16.5.0",
     "pinia": "^3.0.2",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"

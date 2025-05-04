@@ -41,10 +41,20 @@ export const authService = {
 
   async getCurrentUser() {
     try {
+      console.log('[API Service] Fetching current user...');
       const response = await api.get('/api/v1/auth/current-user');
+      console.log('[API Service] Current user response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error('[API Service] Get current user error:', error);
+      // Check for specific error cases
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          console.log('[API Service] User is not authenticated');
+        } else if (error.response?.status === 404) {
+          console.log('[API Service] User not found in database');
+        }
+      }
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get current user'

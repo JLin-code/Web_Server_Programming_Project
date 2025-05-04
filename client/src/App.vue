@@ -2,6 +2,7 @@
 import { RouterView } from 'vue-router'
 import { ref, onMounted, onErrorCaptured } from 'vue'
 import NavBar from './components/NavBar.vue'
+import ConnectionStatus from './components/ConnectionStatus.vue'
 
 // App version
 const appVersion = '1.0.0'
@@ -61,6 +62,7 @@ onMounted(() => {
       <footer class="app-footer">
         <p>© {{ new Date().getFullYear() }} Fitness Tracker v{{ appVersion }}</p>
       </footer>
+      <ConnectionStatus />
     </template>
   </div>
 </template>

@@ -42,6 +42,11 @@ const friendsController = safeRequire('./controllers/friends');
 const commentsController = safeRequire('./controllers/comments');
 const systemController = safeRequire('./controllers/system');
 
+// Import the hardcoded controllers
+const hardcodedUsersController = require('./controllers/hardcodedUsers');
+const hardcodedActivitiesController = require('./controllers/hardcodedActivities');
+const hardcodedFriendsController = require('./controllers/hardcodedFriends');
+
 // Use environment variable or default port, with fallback logic
 const DEFAULT_PORT = 3000;
 const PORT = process.env.PORT || DEFAULT_PORT;
@@ -151,6 +156,11 @@ app.use('/api/v1/comments', commentsController);
 if (systemController && typeof systemController === 'function') {
   app.use('/api', systemController);
 }
+
+// Use the hardcoded controllers
+app.use('/api/v1/hardcoded/users', hardcodedUsersController);
+app.use('/api/v1/hardcoded/activities', hardcodedActivitiesController);
+app.use('/api/v1/hardcoded/friends', hardcodedFriendsController);
 
 // Protected routes - require authentication
 app.use('/api/v1/users', authController.verifyToken, usersController);

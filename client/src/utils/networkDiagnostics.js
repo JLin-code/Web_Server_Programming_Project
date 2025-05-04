@@ -38,16 +38,44 @@ export async function checkSupabaseConnection(supabase) {
     console.log('Checking Supabase connection...');
     const startTime = Date.now();
     
-    // Just do a simple health check query
-    const { data, error } = await supabase.from('users').select('count').limit(1);
+    // Try a simple query first
+    const { data: rpcData, error: rpcError } = await supabase
+      .rpc('get_global_statistics_with_periods')
+      .maybeSingle();
+    
+    // If RPC failed, try a simpler query
+    if (rpcError) {
+      console.warn('RPC method failed, falling back to simple query');
+      const { data, error } = await supabase.from('users').select('count').limit(1);
+      
+      const endTime = Date.now();
+      const latency = endTime - startTime;
+      
+      if (error) {
+        console.error('Supabase simple query error:', error);
+        return {
+          reachable: false,
+          latency,
+          error: error.message,
+          timestamp: new Date().toISOString()
+        };
+      }
+      
+      return {
+        reachable: true,
+        latency,
+        data,
+        timestamp: new Date().toISOString()
+      };
+    }
     
     const endTime = Date.now();
     const latency = endTime - startTime;
     
     return {
-      reachable: !error,
+      reachable: true,
       latency,
-      error: error ? error.message : null,
+      data: rpcData,
       timestamp: new Date().toISOString()
     };
   } catch (error) {

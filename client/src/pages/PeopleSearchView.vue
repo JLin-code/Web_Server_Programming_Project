@@ -43,9 +43,11 @@ onMounted(async () => {
         last_name: user.last_name,
         email: user.email,
         profile_picture_url: user.profile_picture_url,
-        handle: user.handle || `@${user.first_name.toLowerCase()}`
+        handle: user.handle || `@${user.first_name.toLowerCase()}`,
+        role: user.role || 'user'
       }));
-    } catch {
+    } catch (error) {
+      console.error('Failed to fetch users from Supabase:', error);
       // Fall back to API
       const response = await userService.getUsers();
       userList = response.items;

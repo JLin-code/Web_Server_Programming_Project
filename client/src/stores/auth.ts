@@ -125,14 +125,20 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true;
     
     try {
+      console.log('[Auth Store] Checking authentication status...');
+      
       // Check Supabase session first
       try {
         const { data } = await supabase.auth.getSession();
+        console.log('[Auth Store] Supabase session check:', data?.session ? 'Active session found' : 'No active session');
+        
         if (data?.session) {
           // We have a Supabase session, get user details from API
+          console.log('[Auth Store] Getting user details from API with active Supabase session');
           const userDetails = await authService.getCurrentUser();
           
           if (userDetails.success && userDetails.user) {
+            console.log('[Auth Store] Successfully retrieved user details from API');
             user.value = {
               id: userDetails.user.id,
               firstName: userDetails.user.first_name,
@@ -144,16 +150,21 @@ export const useAuthStore = defineStore('auth', () => {
             
             isAuthenticated.value = true;
             return true;
+          } else {
+            console.warn('[Auth Store] API returned success=false or no user data');
           }
         }
       } catch (error) {
-        console.warn('Error checking Supabase session:', error);
+        console.warn('[Auth Store] Error checking Supabase session:', error);
       }
       
       // Fall back to API check
+      console.log('[Auth Store] Falling back to API check for current user');
       const response = await authService.getCurrentUser();
+      console.log('[Auth Store] API getCurrentUser response:', response);
       
       if (response.success && response.user) {
+        console.log('[Auth Store] Successfully retrieved user from API fallback');
         user.value = {
           id: response.user.id,
           firstName: response.user.first_name,
@@ -165,12 +176,14 @@ export const useAuthStore = defineStore('auth', () => {
         
         isAuthenticated.value = true;
         return true;
+      } else {
+        console.log('[Auth Store] User is not authenticated according to API');
       }
       
       // Not authenticated
       return false;
     } catch (error) {
-      console.error('Error checking auth status:', error);
+      console.error('[Auth Store] Error checking auth status:', error);
       return false;
     } finally {
       isLoading.value = false;

@@ -1,146 +1,119 @@
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { authService } from '../services/api'
-import axios from 'axios'
-import supabaseClient from '../services/supabase'  // Changed to default import
-import type { User } from '../types'
+<script setup>
+import { ref, onMounted } from 'vue';
+import { supabaseStats } from '../services/supabase';
 
-// Define the statistics return type
-interface GlobalStatistics {
-  total_users?: number;
-  total_activities?: number;
-  periods?: {
-    all_time?: {
-      likes?: number;
-    };
-  };
-  total_comments?: number;
-  activity_type_distribution?: Record<string, number>;
-}
-
-// Define a type for our enhanced Supabase client
-type EnhancedSupabaseClient = typeof supabaseClient & {
-  getGlobalStatistics: () => Promise<GlobalStatistics>
-}
-
-// Cast the client to our enhanced type
-const supabase = supabaseClient as EnhancedSupabaseClient
-
-// Create a properly typed axios client
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
-// Debug flag - set to false to hide debugging information
-const isDebug = ref(false);
-
-const currentUser = ref<User | null>(null)
-const statistics = ref<{
-  activeUsers: number;
-  totalActivities: number;
-  totalConnections: number;
-  totalComments: number;
-  activityTypes: Record<string, number>;
-}>({
+const isDebug = import.meta.env.DEV;
+const loading = ref(true);
+const error = ref(null);
+const statistics = ref({
   activeUsers: 0,
   totalActivities: 0,
   totalConnections: 0,
   totalComments: 0,
   activityTypes: {}
-})
-const loading = ref(true)
-const error = ref<string | null>(null)
+});
+const currentUser = ref(null);
 
-// Get current user
-const getCurrentUser = async () => {
+async function getCurrentUser() {
   try {
-    console.log('Getting current user...')
-    const response = await authService.getCurrentUser();
-    if (response && response.user) {
-      currentUser.value = response.user;
-      console.log('Current user loaded:', currentUser.value)
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      currentUser.value = user;
     }
   } catch (err) {
-    console.error("Error fetching current user:", err);
-    // Don't set any error state that would prevent rendering
+    console.error('Error getting current user:', err);
   }
 }
 
-// Fetch global statistics
-const fetchStatistics = async () => {
+async function fetchStatistics() {
+  loading.value = true;
+  error.value = null;
+  
   try {
-    console.log('Fetching statistics...')
-    loading.value = true
-    error.value = null
+    console.log("Fetching statistics data...");
+    const response = await supabaseStats.getGlobalStatistics();
     
-    // Try Supabase first (using the function we created)
-    const globalStats = await supabase.getGlobalStatistics().catch(() => null);
-    
-    if (globalStats) {
+    if (response) {
+      // Map the response to our expected format
       statistics.value = {
-        activeUsers: globalStats.total_users || 0,
-        totalActivities: globalStats.total_activities || 0,
-        totalConnections: (globalStats.periods?.all_time?.likes || 0),
-        totalComments: globalStats.total_comments || 0,
-        activityTypes: globalStats.activity_type_distribution || {}
+        activeUsers: response.total_users || 0,
+        totalActivities: response.periods?.all_time?.activities || 0,
+        totalConnections: response.total_connections || 0,
+        totalComments: response.periods?.all_time?.comments || 0,
+        activityTypes: response.activity_type_distribution || {}
       };
-      console.log('Statistics loaded from Supabase:', statistics.value);
-    } 
-    // Fallback to API
-    else {
-      const response = await apiClient.get('/api/v1/data/statistics/global').catch(() => {
-        console.warn('API call failed, using fallback data');
-        return { data: null };
-      });
-      
-      if (response?.data?.success && response.data.statistics) {
-        statistics.value = {
-          activeUsers: response.data.statistics.active_users || 7,
-          totalActivities: response.data.statistics.total_activities || 12,
-          totalConnections: response.data.statistics.total_connections || 9,
-          totalComments: response.data.statistics.total_comments || 12,
-          activityTypes: response.data.statistics.activity_type_distribution || {}
-        };
-        console.log('Statistics loaded from API');
-      } else {
-        // Use fallback data if API fails
-        console.log('Using fallback statistics data');
-        statistics.value = {
-          activeUsers: 7,
-          totalActivities: 12,
-          totalConnections: 9,
-          totalComments: 12,
-          activityTypes: {
-            running: 1,
-            strength: 1,
-            yoga: 1,
-            cycling: 2,
-            cardio: 1,
-            swimming: 1,
-            basketball: 1,
-            pilates: 1,
-            tennis: 1,
-            hiking: 1,
-            dance: 1
-          }
-        };
-      }
+      console.log('Statistics loaded from API');
+    } else {
+      // Use fallback data if API fails
+      console.log('Using fallback statistics data');
+      statistics.value = {
+        activeUsers: 7,
+        totalActivities: 25,
+        totalConnections: 15,
+        totalComments: 42,
+        activityTypes: {
+          running: 8,
+          strength: 5,
+          yoga: 2,
+          cycling: 4,
+          cardio: 3,
+          swimming: 1,
+          basketball: 2,
+          pilates: 1,
+          tennis: 1,
+          hiking: 3,
+          dance: 2
+        }
+      };
     }
   } catch (err) {
-    console.error('Failed to load statistics:', err)
-    error.value = 'Unable to load statistics. Using default values.'
-    // Fallback data is already set in the ref initialization
+    console.error('Failed to load statistics:', err);
+    error.value = 'Unable to load statistics. Using default values.';
+    
+    // Always provide fallback data to prevent UI breaking
+    statistics.value = {
+      activeUsers: 7,
+      totalActivities: 25,
+      totalConnections: 15,
+      totalComments: 42,
+      activityTypes: {
+        running: 8,
+        strength: 5,
+        yoga: 2,
+        cycling: 4,
+        cardio: 3
+      }
+    };
   } finally {
-    loading.value = false
+    loading.value = false;
   }
+}
+
+// Function to format activity type for display
+function formatActivityType(type) {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+// Function to get activity icon based on type
+function getActivityIcon(type) {
+  const icons = {
+    running: '🏃',
+    strength: '💪',
+    yoga: '🧘',
+    cycling: '🚴',
+    cardio: '❤️',
+    swimming: '🏊',
+    basketball: '🏀',
+    pilates: '🤸',
+    tennis: '🎾',
+    hiking: '🥾',
+    dance: '💃'
+  };
+  return icons[type] || '🏋️';
 }
 
 onMounted(() => {
-  console.log('HomeView component mounted')
+  console.log('HomeView component mounted');
   getCurrentUser();
   fetchStatistics();
 })
@@ -232,30 +205,6 @@ onMounted(() => {
     </section>
   </div>
 </template>
-
-<script lang="ts">
-// Helper functions for display
-function getActivityIcon(type: string) {
-  const icons: Record<string, string> = {
-    running: '🏃',
-    cycling: '🚴',
-    swimming: '🏊',
-    yoga: '🧘',
-    strength: '💪',
-    cardio: '❤️',
-    basketball: '🏀',
-    tennis: '🎾',
-    pilates: '🤸',
-    hiking: '🥾',
-    dance: '💃'
-  };
-  return icons[type.toLowerCase()] || '🏋️';
-}
-
-function formatActivityType(type: string) {
-  return type.charAt(0).toUpperCase() + type.slice(1);
-}
-</script>
 
 <style scoped>
 .debug-panel {

@@ -9,6 +9,9 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-default-jwt-secret-key';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '24h';
 
+// Add debug logging
+const DEBUG = process.env.DEBUG_AUTH === 'true';
+
 // Login route
 router.post('/login', async (req, res) => {
   try {
@@ -91,10 +94,13 @@ router.post('/logout', (req, res) => {
 // Get current user
 router.get('/current-user', async (req, res) => {
   try {
+    if (DEBUG) console.log('[Auth Controller] Getting current user from token');
+    
     // Check for token in cookies
     const token = req.cookies.auth_token;
     
     if (!token) {
+      if (DEBUG) console.log('[Auth Controller] No auth token found in cookies');
       return res.status(401).json({
         success: false,
         message: 'Not authenticated'
@@ -103,16 +109,20 @@ router.get('/current-user', async (req, res) => {
     
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
+    if (DEBUG) console.log(`[Auth Controller] Token verified, user ID: ${decoded.id}`);
     
     // Get user from database
     const user = await userModel.getById(decoded.id);
     
     if (!user) {
+      console.error(`[Auth Controller] User not found with ID: ${decoded.id}`);
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
+    
+    if (DEBUG) console.log(`[Auth Controller] Current user retrieved: ${user.first_name} ${user.last_name}`);
     
     return res.json({
       success: true,
@@ -121,22 +131,25 @@ router.get('/current-user', async (req, res) => {
         first_name: user.first_name,
         last_name: user.last_name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        profile_picture_url: user.profile_picture_url
       }
     });
     
   } catch (error) {
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      console.error('[Auth Controller] Invalid or expired token:', error.message);
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired token'
       });
     }
     
-    console.error('Error getting current user:', error);
+    console.error('[Auth Controller] Error getting current user:', error);
     return res.status(500).json({
       success: false,
-      message: 'Error getting current user'
+      message: 'Error getting current user',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -218,6 +231,69 @@ const isAdmin = (req, res, next) => {
     success: false,
     message: 'Access denied. Admin role required.'
   });
+};
+
+// Mock demo users for development and testing
+const demoUsers = [
+  {
+    username: 'admin@example.com',
+    displayName: 'Admin User (Administrator)',
+    firstName: 'Admin',
+    lastName: 'User',
+    isAdmin: true
+  },
+  {
+    username: 'user@example.com',
+    displayName: 'Regular User',
+    firstName: 'Regular',
+    lastName: 'User',
+    isAdmin: false
+  },
+  {
+    username: 'demo@example.com',
+    displayName: 'Demo User',
+    firstName: 'Demo',
+    lastName: 'User',
+    isAdmin: false
+  }
+];
+
+// GET /api/v1/auth/demo-users - Return demo users for login dropdown
+router.get('/demo-users', (req, res) => {
+  try {
+    console.log('Serving demo users from auth controller');
+    
+    // Return the demo users
+    return res.json({
+      success: true,
+      message: 'Demo users retrieved successfully',
+      users: demoUsers
+    });
+  } catch (error) {
+    console.error('Error serving demo users:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error retrieving demo users',
+      error: error.message
+    });
+  }
+});
+
+// Basic middleware to verify JWT token
+// This is a placeholder - in a real app, you'd verify the token properly
+const verifyTokenMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader) {
+    return res.status(401).json({
+      success: false,
+      message: 'No token provided'
+    });
+  }
+  
+  // In a real implementation, you would verify the token
+  // For demo purposes, we'll just check if it exists
+  next();
 };
 
 // Export both router and middleware

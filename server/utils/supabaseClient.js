@@ -99,12 +99,19 @@ const supabase = createClient(
   }
 );
 
-// Add a test function that verifies connection
+// Add debug logging to help diagnose issues
+const DEBUG = process.env.DEBUG_DATABASE_QUERIES === 'true';
+
+// Enhanced test function that verifies connection
 async function testConnection() {
   console.log('Testing Supabase connection from server...');
   try {
     const startTime = process.hrtime();
-    const { data, error } = await supabase.from('users').select('count').limit(1);
+    // Test the user table specifically
+    const { data, error } = await supabase.from('users')
+      .select('id, first_name, last_name, email, role')
+      .limit(3);
+    
     const hrTime = process.hrtime(startTime);
     const duration = hrTime[0] * 1000 + hrTime[1] / 1000000;
     
@@ -116,13 +123,47 @@ async function testConnection() {
     }
     
     console.log(`✅ Supabase connection successful (${duration.toFixed(2)}ms)`);
-    console.log(`   Response: ${JSON.stringify(data)}`);
+    console.log(`   Found ${data?.length || 0} users`);
+    if (data && data.length > 0) {
+      console.log(`   First user: ${JSON.stringify({
+        id: data[0].id,
+        name: `${data[0].first_name} ${data[0].last_name}`,
+        email: data[0].email,
+        role: data[0].role
+      })}`);
+    } else {
+      console.warn('   No users found in database. This might indicate an empty table or permission issue.');
+    }
     return true;
   } catch (err) {
     console.error('❌ Critical Supabase connection error:', err);
     console.error('This could indicate network issues or invalid credentials.');
     return false;
   }
+}
+
+// Create an enhanced query wrapper for debugging
+const enhancedQuery = (tableName) => {
+  return {
+    select: async (columns) => {
+      if (DEBUG) console.log(`[DB] Querying ${tableName} for ${columns}`);
+      const startTime = process.hrtime();
+      const result = await supabase.from(tableName).select(columns);
+      
+      const hrTime = process.hrtime(startTime);
+      const duration = hrTime[0] * 1000 + hrTime[1] / 1000000;
+      
+      if (DEBUG) {
+        if (result.error) {
+          console.error(`[DB] Error querying ${tableName}: ${result.error.message} (${duration.toFixed(2)}ms)`);
+        } else {
+          console.log(`[DB] Successfully retrieved ${result.data?.length || 0} rows from ${tableName} (${duration.toFixed(2)}ms)`);
+        }
+      }
+      
+      return result;
+    }
+  };
 }
 
 // Function to execute SQL directly (which the client doesn't support directly)
@@ -200,5 +241,6 @@ async function executeSql(sql) {
 module.exports = { 
   supabase,
   executeSql,
-  testConnection
+  testConnection,
+  enhancedQuery
 };

@@ -16,6 +16,7 @@ const isLoggedIn = ref(false);
 const attemptedRoute = ref('');
 const demoUsers = ref<Array<{username: string, displayName: string}>>([]);
 const demoUsersLoading = ref(true);
+const loginInProgress = ref(false);
 const currentUser = ref({
     id: '',
     name: '',
@@ -33,64 +34,106 @@ function toggleBurger() {
 
 onMounted(async () => {
   try {
-    await loadDemoUsers();
-    await checkUserSession();
+    // Start loading both at once to improve performance
+    const checkSessionPromise = checkUserSession();
+    const loadUsersPromise = loadDemoUsers();
+    
+    // Wait for both to complete
+    await Promise.all([checkSessionPromise, loadUsersPromise]);
   } catch (err) {
     console.error('Error in NavBar initialization:', err);
     errorMessage.value = err instanceof Error ? err.message : 'Unknown error initializing navigation';
     hasError.value = true;
+    // Always ensure loading states are finished even if there's an error
+    demoUsersLoading.value = false;
   }
 });
 
-// Enhanced loadDemoUsers without network diagnostics
+// Improved loadDemoUsers with direct Supabase connection
 async function loadDemoUsers() {
   try {
     demoUsersLoading.value = true;
     console.log('Loading demo users...');
     
-    // Import fallback users directly from the module
-    const { demoUsers: fallbackUsers } = await import('@/data/hardcodedUsers');
+    // Try to get users directly from Supabase
+    try {
+      // Direct Supabase query for better performance
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email')
+        .limit(10);
+      
+      if (error) {
+        console.error('Supabase error loading users:', error);
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        console.log('Users loaded directly from Supabase:', data.length);
+        
+        // Map the users to the format we need
+        demoUsers.value = data.map(user => ({
+          username: user.email,
+          displayName: `${user.first_name} ${user.last_name}`
+        }));
+        
+        demoUsersLoading.value = false;
+        return true;
+      }
+    } catch (supabaseError) {
+      console.warn('Supabase users fetch failed:', supabaseError);
+    }
     
-    // Always set the fallback users first to ensure something is available
+    // Fall back to API if Supabase direct fails
+    try {
+      const response = await authService.getDemoUsers();
+      
+      if (response?.success && Array.isArray(response.users) && response.users.length > 0) {
+        demoUsers.value = response.users.map((user: any) => ({
+          username: user.username || user.email || user.id,
+          displayName: user.displayName || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username
+        }));
+        console.log('Demo users loaded from API:', demoUsers.value.length);
+        return true;
+      }
+    } catch (apiError) {
+      console.warn('API call for demo users failed:', apiError);
+    }
+    
+    // Fall back to store
+    try {
+      const success = await usersStore.fetchDemoUsers();
+      
+      if (success && usersStore.demoUsers.length > 0) {
+        demoUsers.value = usersStore.demoUsers.map(user => ({
+          username: user.username,
+          displayName: user.displayName
+        }));
+        console.log('Demo users loaded from store:', demoUsers.value.length);
+        return true;
+      }
+    } catch (storeError) {
+      console.warn('Store fallback for demo users failed:', storeError);
+    }
+    
+    // If all else fails, use fallback users
     demoUsers.value = fallbackUsers.map(user => ({
       username: user.username,
       displayName: user.displayName
     }));
-    
-    // Try to get users directly from API first
-    try {
-      // Make sure to use the authService which now has the fixed URL
-      const response = await authService.getDemoUsers();
-      
-      if (response?.success && Array.isArray(response.users) && response.users.length > 0) {
-        console.log('Demo users loaded directly from API:', response.users.length);
-        demoUsers.value = response.users.map((user: { username: string, displayName: string }) => ({
-          username: user.username,
-          displayName: user.displayName
-        }));
-        return true;
-      }
-    } catch (apiError) {
-      console.warn('Direct API call failed:', apiError);
-    }
-    
-    // Fall back to store if direct API call fails
-    const success = await usersStore.fetchDemoUsers();
-    
-    if (success && usersStore.demoUsers.length > 0) {
-      // Map demo users from the store to the format needed for the dropdown
-      demoUsers.value = usersStore.demoUsers.map(user => ({
-        username: user.username,
-        displayName: user.displayName
-      }));
-      console.log('Demo users loaded from store:', demoUsers.value.length);
-    } else {
-      console.log('Using fallback users:', demoUsers.value.length);
-    }
+    console.log('Using fallback hardcoded users:', demoUsers.value.length);
+    return true;
   } catch (err) {
     console.error('Error loading demo users:', err);
-    // Handle fallback logic if needed
+    // Set some default users to prevent blank state
+    demoUsers.value = [
+      { username: 'admin@example.com', displayName: 'Admin User' },
+      { username: 'user@example.com', displayName: 'Regular User' },
+      { username: 'demo@example.com', displayName: 'Demo User' }
+    ];
+    return false;
   } finally {
+    // Always reset loading state
     demoUsersLoading.value = false;
   }
 }
@@ -106,34 +149,57 @@ watch(() => usersStore.demoUsers, (newDemoUsers) => {
   }
 }, { deep: true });
 
-// Simplified session check
+// Improved session check with better error handling
 async function checkUserSession() {
   try {
+    console.log('Checking user session...');
+    
     // Try Supabase first
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Supabase session error:', sessionError);
+    }
     
     if (session) {
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, email, role, profile_picture_url')
-        .eq('email', session.user.email)
-        .single();
-        
-      if (userData && !userError) {
-        setUserData({
-          id: userData.id,
-          name: `${userData.first_name} ${userData.last_name}`,
-          email: userData.email,
-          profilePicture: userData.profile_picture_url
-        });
-        return;
+      console.log('Supabase session found:', session.user.email);
+      
+      try {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, email, role, profile_picture_url')
+          .eq('email', session.user.email)
+          .single();
+          
+        if (userError) {
+          console.error('Error fetching user data:', userError);
+        }
+          
+        if (userData) {
+          console.log('User data retrieved from Supabase');
+          
+          setUserData({
+            id: userData.id,
+            name: `${userData.first_name} ${userData.last_name}`,
+            email: userData.email,
+            profilePicture: userData.profile_picture_url
+          });
+          
+          // Set admin status if it exists in the user data
+          currentUser.value.isAdmin = userData.role === 'admin';
+          
+          return true;
+        }
+      } catch (userQueryError) {
+        console.error('Error during user data query:', userQueryError);
       }
     }
     
     // Fallback to API
-    await checkApiUser();
+    return await checkApiUser();
   } catch (err) {
     console.warn('Session check error:', err);
+    return false;
   }
 }
 
@@ -162,51 +228,100 @@ function checkLoginBeforeNav(route: string) {
   return true;
 }
 
-// Simplified login function
+// Improved login function with timeout and better error handling
 async function login(username: string, password: string) {
+  if (loginInProgress.value) {
+    console.log('Login already in progress');
+    return { success: false, message: 'Login already in progress' };
+  }
+  
+  loginInProgress.value = true;
+  
   try {
-    // Try Supabase login
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: username,
-      password: password
+    console.log('Attempting login with:', username);
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Login timeout')), 5000); // 5 second timeout
     });
     
-    if (!authError && authData.user) {
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, email, role, profile_picture_url')
-        .eq('email', authData.user.email)
-        .single();
+    // Try Supabase login with timeout
+    try {
+      const loginPromise = supabase.auth.signInWithPassword({
+        email: username,
+        password: password || 'password' // Use provided password or default
+      });
       
-      if (userData) {
+      const { data: authData, error: authError } = await Promise.race([
+        loginPromise,
+        timeoutPromise
+      ]) as any;
+      
+      if (authError) {
+        console.warn('Supabase auth error:', authError);
+      } else if (authData?.user) {
+        console.log('Supabase auth successful');
+        
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, email, role, profile_picture_url')
+          .eq('email', authData.user.email)
+          .single();
+        
+        if (userError) {
+          console.warn('User data fetch error:', userError);
+        }
+        
+        if (userData) {
+          setUserData({
+            id: userData.id,
+            name: `${userData.first_name} ${userData.last_name}`,
+            email: userData.email,
+            profilePicture: userData.profile_picture_url
+          });
+          
+          // Set admin status if it exists
+          currentUser.value.isAdmin = userData.role === 'admin';
+          
+          handleSuccessfulLogin();
+          return { success: true };
+        }
+      }
+    } catch (timeoutError) {
+      console.warn('Supabase login timed out:', timeoutError);
+    }
+    
+    // Try API login as a fallback
+    try {
+      const response = await authService.login(username, password || 'password');
+      
+      if (response?.success) {
+        console.log('API login successful');
+        
         setUserData({
-          id: userData.id,
-          name: `${userData.first_name} ${userData.last_name}`,
-          email: userData.email,
-          profilePicture: userData.profile_picture_url
+          id: response.user.id,
+          name: `${response.user.first_name} ${response.user.last_name}`,
+          email: response.user.email,
+          profilePicture: response.user.profile_picture_url
         });
+        
+        // Set admin status if it exists
+        currentUser.value.isAdmin = response.user.role === 'admin';
+        
         handleSuccessfulLogin();
         return { success: true };
       }
+    } catch (apiError) {
+      console.warn('API login error:', apiError);
     }
     
-    // Try API login
-    const apiResponse = await authService.login(username, password);
-    if (apiResponse?.success) {
-      setUserData({
-        id: apiResponse.user.id,
-        name: `${apiResponse.user.first_name} ${apiResponse.user.last_name}`,
-        email: apiResponse.user.email,
-        profilePicture: apiResponse.user.profile_picture_url
-      });
-      handleSuccessfulLogin();
-      return { success: true };
-    }
-
-    // Fallback to demo login
+    // Only use fallback login as a last resort
     return fallbackLogin(username);
-  } catch {
-    return fallbackLogin(username);
+  } catch (err) {
+    console.error('Login error:', err);
+    return { success: false, message: err instanceof Error ? err.message : 'Login failed' };
+  } finally {
+    loginInProgress.value = false;
   }
 }
 
@@ -218,8 +333,10 @@ function handleSuccessfulLogin() {
   }
 }
 
-// Simplified fallback login
+// Improved fallback login
 function fallbackLogin(username: string) {
+  console.log('Using fallback login with:', username);
+  
   const hardcodedUser = fallbackUsers.find(user => user.username === username);
   if (hardcodedUser && username) {
     const nameParts = hardcodedUser.displayName.split(' ');
@@ -240,37 +357,53 @@ function fallbackLogin(username: string) {
     handleSuccessfulLogin();
     return { success: true };
   }
+  
   return { success: false, message: 'Invalid login credentials' };
 }
 
-// Simplified logout
+// Improved logout function
 async function logout() {
   try {
-    await supabase.auth.signOut();
-    await authService.logout().catch(() => {});
+    // Try Supabase logout
+    await supabase.auth.signOut().catch(err => console.warn('Supabase signout error:', err));
+    
+    // Also try API logout
+    await authService.logout().catch(err => console.warn('API logout error:', err));
   } catch (error) {
     console.error('Logout error:', error);
   } finally {
+    // Always reset user state
     isLoggedIn.value = false;
     currentUser.value = { id: '', name: '', email: '', isAdmin: false, profilePicture: '' };
     router.push('/');
   }
 }
-// Simplified API user check
+
+// Improved API user check
 async function checkApiUser() {
   try {
+    console.log('Checking API user...');
+    
     const response = await authService.getCurrentUser().catch(() => null);
     
     if (response?.user) {
+      console.log('API user found');
+      
       setUserData({
         id: response.user.id,
         name: `${response.user.first_name} ${response.user.last_name}`,
         email: response.user.email,
         profilePicture: response.user.profile_picture_url
       });
+      
+      // Set admin status if it exists
+      currentUser.value.isAdmin = response.user.role === 'admin';
+      return true;
     }
+    return false;
   } catch (err) {
     console.warn('API user check failed:', err);
+    return false;
   }
 }
 
@@ -314,6 +447,16 @@ function setUserData(userData: {id: string, name: string, email: string, profile
                             <span>My Activity</span>
                         </span>
                     </a>
+
+                    <!-- New workout stats link -->
+                    <a class="navbar-item is-hidden-mobile" @click="checkLoginBeforeNav('/') && router.push('/workout-stats')">
+                        <span class="icon-text">
+                            <span class="icon">
+                                <i class="fas fa-chart-line"></i>
+                            </span>
+                            <span>Workout Stats</span>
+                        </span>
+                    </a>
                     
                     <a class="navbar-item is-hidden-mobile" @click="router.push('/')">
                         <span class="icon-text">
@@ -351,6 +494,16 @@ function setUserData(userData: {id: string, name: string, email: string, profile
                                     <i class="fas fa-running"></i>
                                 </span>
                                 <span>My Activity</span>
+                            </span>
+                        </a>
+
+                        <!-- New workout stats link -->
+                        <a class="navbar-item is-hidden-tablet" @click="checkLoginBeforeNav('/') && router.push('/workout-stats')">
+                            <span class="icon-text">
+                                <span class="icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </span>
+                                <span>Workout Stats</span>
                             </span>
                         </a>
                         

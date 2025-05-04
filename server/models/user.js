@@ -1,4 +1,5 @@
 const { supabase } = require('../utils/supabaseClient');
+const DEBUG = process.env.DEBUG_DATABASE_QUERIES === 'true';
 
 const userModel = {
   /**
@@ -6,11 +7,18 @@ const userModel = {
    * @returns {Promise<Array>} List of users
    */
   async getAll() {
+    if (DEBUG) console.log('[User Model] Getting all users');
+    
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, role, created_at');
+      .select('id, email, first_name, last_name, role, profile_picture_url, created_at');
       
-    if (error) throw new Error(`Database error: ${error.message}`);
+    if (error) {
+      console.error('[User Model] Database error in getAll:', error);
+      throw new Error(`Database error: ${error.message}`);
+    }
+    
+    if (DEBUG) console.log(`[User Model] Retrieved ${data?.length || 0} users`);
     return data;
   },
 
@@ -20,19 +28,29 @@ const userModel = {
    * @returns {Promise<Object>} User data
    */
   async getById(id) {
+    if (DEBUG) console.log(`[User Model] Getting user by ID: ${id}`);
+    
+    if (id === 'current') {
+      console.warn('[User Model] Attempted to get user with ID "current" - this should be handled by the auth controller');
+      return null;
+    }
+    
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, role, created_at')
+      .select('id, email, first_name, last_name, role, profile_picture_url, created_at')
       .eq('id', id)
       .single();
       
     if (error) {
       if (error.code === 'PGRST116') {
+        console.log(`[User Model] No user found with ID: ${id}`);
         return null; // No match found
       }
+      console.error(`[User Model] Database error getting user ${id}:`, error);
       throw new Error(`Database error: ${error.message}`);
     }
     
+    if (DEBUG && data) console.log(`[User Model] Retrieved user: ${data.first_name} ${data.last_name}`);
     return data;
   },
 
@@ -42,19 +60,24 @@ const userModel = {
    * @returns {Promise<Object>} User data
    */
   async getByEmail(email) {
+    if (DEBUG) console.log(`[User Model] Getting user by email: ${email}`);
+    
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('id, email, first_name, last_name, role, profile_picture_url, created_at')
       .eq('email', email)
       .single();
       
     if (error) {
       if (error.code === 'PGRST116') {
+        console.log(`[User Model] No user found with email: ${email}`);
         return null; // No match found
       }
+      console.error(`[User Model] Database error getting user by email ${email}:`, error);
       throw new Error(`Database error: ${error.message}`);
     }
     
+    if (DEBUG && data) console.log(`[User Model] Retrieved user by email: ${data.first_name} ${data.last_name}`);
     return data;
   },
 
@@ -87,20 +110,27 @@ const userModel = {
    * @returns {Promise<Object>} Updated user
    */
   async update(id, userData) {
-    // Filter out any undefined values
-    const updateData = Object.fromEntries(
-      Object.entries(userData).filter(([_, v]) => v !== undefined)
-    );
-    
-    const { data, error } = await supabase
-      .from('users')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+    try {
+      // Filter out any undefined values
+      const updateData = Object.fromEntries(
+        Object.entries(userData).filter(([_, v]) => v !== undefined)
+      );
       
-    if (error) throw new Error(`Failed to update user: ${error.message}`);
-    return data;
+      const { data, error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) throw new Error(`Failed to update user: ${error.message}`);
+      
+      if (DEBUG) console.log(`[User Model] Updated user: ${id}`);
+      return data;
+    } catch (err) {
+      console.error(`[User Model] Error updating user ${id}:`, err);
+      throw err;
+    }
   },
 
   /**
@@ -109,13 +139,20 @@ const userModel = {
    * @returns {Promise<boolean>} Success status
    */
   async delete(id) {
-    const { error } = await supabase
-      .from('users')
-      .delete()
-      .eq('id', id);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw new Error(`Failed to delete user: ${error.message}`);
       
-    if (error) throw new Error(`Failed to delete user: ${error.message}`);
-    return true;
+      if (DEBUG) console.log(`[User Model] Deleted user: ${id}`);
+      return true;
+    } catch (err) {
+      console.error(`[User Model] Error deleting user ${id}:`, err);
+      throw err;
+    }
   },
   
   /**
@@ -124,11 +161,31 @@ const userModel = {
    * @returns {Promise<Object>} User statistics
    */
   async getStatistics(id) {
-    const { data, error } = await supabase
-      .rpc('get_user_statistics_with_periods', { user_id_param: id });
+    try {
+      const { data, error } = await supabase
+        .rpc('get_user_statistics_with_periods', { user_id_param: id });
+        
+      if (error) throw new Error(`Failed to get user statistics: ${error.message}`);
       
-    if (error) throw new Error(`Failed to get user statistics: ${error.message}`);
-    return data;
+      if (DEBUG) console.log(`[User Model] Retrieved statistics for user: ${id}`);
+      return data || {
+        user: {},
+        today: {},
+        week: {},
+        month: {},
+        all_time: {}
+      };
+    } catch (err) {
+      console.error(`[User Model] Error getting statistics for user ${id}:`, err);
+      // Return empty data rather than throwing to prevent UI breaks
+      return {
+        user: {},
+        today: {},
+        week: {},
+        month: {},
+        all_time: {}
+      };
+    }
   },
   
   /**
@@ -136,11 +193,37 @@ const userModel = {
    * @returns {Promise<Object>} Global statistics
    */
   async getGlobalStatistics() {
-    const { data, error } = await supabase
-      .rpc('get_global_statistics_with_periods');
+    try {
+      const { data, error } = await supabase
+        .rpc('get_global_statistics_with_periods');
+        
+      if (error) throw new Error(`Failed to get global statistics: ${error.message}`);
       
-    if (error) throw new Error(`Failed to get global statistics: ${error.message}`);
-    return data;
+      if (DEBUG) console.log('[User Model] Retrieved global statistics');
+      return data || {
+        total_users: 0,
+        periods: {
+          today: { activities: 0, comments: 0, likes: 0 },
+          week: { activities: 0, comments: 0, likes: 0 },
+          month: { activities: 0, comments: 0, likes: 0 },
+          all_time: { activities: 0, comments: 0, likes: 0 }
+        },
+        activity_type_distribution: {}
+      };
+    } catch (err) {
+      console.error('[User Model] Error getting global statistics:', err);
+      // Return empty data rather than throwing to prevent UI breaks
+      return {
+        total_users: 0,
+        periods: {
+          today: { activities: 0, comments: 0, likes: 0 },
+          week: { activities: 0, comments: 0, likes: 0 },
+          month: { activities: 0, comments: 0, likes: 0 },
+          all_time: { activities: 0, comments: 0, likes: 0 }
+        },
+        activity_type_distribution: {}
+      };
+    }
   }
 };
 

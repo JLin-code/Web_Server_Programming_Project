@@ -55,7 +55,7 @@ export interface AuthService {
 export interface UserService {
   getUsers(): Promise<UsersResponse>;
   getUserById(id: string): Promise<UserResponse>;
-  updateUser(id: string, userData: Record<string, any>): Promise<UserResponse>;
+  updateUser(id: string, userData: Partial<Omit<User, 'id'>>): Promise<UserResponse>;
   delete(id: string): Promise<{ success: boolean; message?: string }>;
 }
 

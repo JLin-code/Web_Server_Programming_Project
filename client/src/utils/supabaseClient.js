@@ -14,7 +14,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your .env file.');
 }
 
-// Create Supabase client with explicit headers
+// Create a custom Supabase client with error handling and debug logs
 export const supabase = createClient(
   supabaseUrl,
   supabaseAnonKey,
@@ -25,19 +25,29 @@ export const supabase = createClient(
     },
     global: {
       headers: {
-        'apikey': supabaseAnonKey,
-        'Authorization': `Bearer ${supabaseAnonKey}`,
         'x-application-name': 'fitness-tracker-client'
-      }
+      },
+    },
+    // Add debug option to log all requests and responses
+    debug: {
+      request: true,
+      response: true
     }
   }
 );
 
-// Test connection on client load
+// Enhanced test connection with better error handling and detailed logs
 async function testConnection() {
   try {
     console.log('Testing Supabase connection from client...');
+    console.log('URL:', supabaseUrl);
+    console.log('Key format check:', supabaseAnonKey ? 
+      `Key starts with: ${supabaseAnonKey.substring(0, 10)}...` : 
+      'Key is missing!');
+    
     const startTime = performance.now();
+    console.log('Executing test query...');
+    
     const { data, error } = await supabase.from('users').select('count').limit(1);
     const duration = performance.now() - startTime;
     
@@ -45,11 +55,30 @@ async function testConnection() {
       console.error(`❌ Supabase connection failed (${duration.toFixed(2)}ms):`);
       console.error(`   Error: ${error.message}`);
       console.error(`   Code: ${error.code}`);
+      console.error(`   Details: ${JSON.stringify(error.details || {})}`);
+      console.error('Please check:');
+      console.error('1. Your .env file settings');
+      console.error('2. Network connectivity to Supabase');
+      console.error('3. Database permissions');
       return false;
     }
     
     console.log(`✅ Supabase connection successful (${duration.toFixed(2)}ms)`);
     console.log(`   Response: ${JSON.stringify(data)}`);
+    
+    // Also try to fetch first user row to verify permissions
+    console.log('Attempting to fetch a user record...');
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .limit(1);
+      
+    if (userError) {
+      console.warn(`⚠️ Could fetch count but not user data: ${userError.message}`);
+    } else {
+      console.log(`✅ Successfully fetched user data:`, userData);
+    }
+    
     return true;
   } catch (err) {
     console.error('❌ Critical Supabase connection error:', err);

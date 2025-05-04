@@ -1,6 +1,24 @@
-// Re-export services from a central location for easier imports
-export { authService, userService } from './api';
+// Import both real Supabase services and mock services for fallback
+import { userService as mockUserService, activitiesService as mockActivitiesService, friendsService as mockFriendsService, statsService as mockStatsService } from './mockApi';
+import api from './api';
+import { supabaseUsers, supabaseActivities, supabaseFriends, supabaseStats } from './supabase';
+
+// Always attempt to use real Supabase data first, fall back to mock if needed
+export const userService = supabaseUsers || mockUserService;
+export const activitiesService = supabaseActivities || mockActivitiesService;
+export const friendsService = supabaseFriends || mockFriendsService;
+export const statsService = supabaseStats || mockStatsService;
+
 export { default as api } from './api';
-export { friendsService } from './friendsApi';
-export { activitiesService } from './activitiesApi';
-export { supabase, supabaseUsers, supabaseActivities, supabaseFriends, supabaseStats } from './supabase';
+
+// Create enhanced Supabase for backward compatibility
+const enhancedSupabaseClient = {
+  getUserStatistics: statsService.getUserStatistics,
+  getGlobalStatistics: statsService.getGlobalStatistics
+};
+
+// Export for compatibility with existing code
+export const supabase = enhancedSupabaseClient;
+export const enhancedSupabase = enhancedSupabaseClient;
+export const supabaseUsersService = userService;
+export default enhancedSupabaseClient;

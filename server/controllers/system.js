@@ -26,54 +26,46 @@ router.get('/health', (req, res) => {
   res.status(200).json(healthInfo);
 });
 
-// System diagnostics endpoint
-router.get('/diagnostics', async (req, res) => {
+// Detailed DB test endpoint to debug Supabase connectivity
+router.get('/db-test', async (req, res) => {
+  console.log('Running database connectivity test...');
   try {
-    // Check Supabase connection
-    let dbStatus = { connected: false, latency: null };
     const startTime = Date.now();
     
-    try {
-      // Simple query to check if database is responsive
-      const { data, error } = await supabase.from('users').select('count').limit(1);
-      const endTime = Date.now();
+    // Basic query to check connection
+    const { data, error } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1);
       
-      dbStatus = {
-        connected: !error,
-        latency: endTime - startTime,
-        error: error ? error.message : null
-      };
-    } catch (dbError) {
-      dbStatus.error = dbError.message;
+    const responseTime = Date.now() - startTime;
+    
+    if (error) {
+      console.error('Database test failed:', error);
+      return res.status(500).json({
+        success: false,
+        error: error.message,
+        code: error.code,
+        responseTime: `${responseTime}ms`
+      });
     }
     
-    // Get system info
-    const diagnostics = {
-      api: {
-        status: 'online',
-        serverTime: new Date().toISOString(),
-        uptime: process.uptime(),
-        environment: process.env.NODE_ENV || 'development',
-      },
-      database: dbStatus,
-      memory: {
-        rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
-        heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
-        heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
-        external: `${Math.round(process.memoryUsage().external / 1024 / 1024)}MB`,
+    return res.status(200).json({
+      success: true,
+      data,
+      responseTime: `${responseTime}ms`,
+      environmentChecks: {
+        supabaseUrl: !!process.env.SUPABASE_URL,
+        supabaseKeySet: !!process.env.SUPABASE_SECRET_KEY,
+        nodeEnv: process.env.NODE_ENV || 'development'
       }
-    };
-    
-    return res.status(200).json(diagnostics);
-  } catch (error) {
-    console.error('Error in diagnostics endpoint:', error);
+    });
+  } catch (err) {
+    console.error('Database test exception:', err);
     return res.status(500).json({
       success: false,
-      message: 'Failed to retrieve system diagnostics',
-      error: process.env.NODE_ENV === 'production' ? {} : {
-        name: error.name,
-        message: error.message,
-      }
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 });

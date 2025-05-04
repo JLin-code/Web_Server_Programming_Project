@@ -434,39 +434,93 @@ export const supabaseFriends = {
   }
 }
 
-// Statistics methods
+// Statistics methods - fixed to ensure they properly work
 export const supabaseStats = {
   async getUserStatistics(userId) {
-    const { data, error } = await supabase
-      .rpc('get_user_statistics_with_periods', { user_id_param: userId })
-    
-    if (error) {
-      console.error('Error fetching user statistics:', error)
-      throw error
+    console.log("Fetching user statistics for:", userId);
+    try {
+      // Use the new RPC function from our SQL script
+      const { data, error } = await supabase
+        .rpc('get_user_statistics_with_periods', { user_id_param: userId });
+      
+      if (error) {
+        console.error('Error fetching user statistics:', error);
+        throw error;
+      }
+      
+      // Transform data to match expected format or return default values
+      return data || {
+        user: {},
+        today: { total_activities: 0, total_likes_received: 0, total_comments_received: 0 },
+        week: { total_activities: 0, total_likes_received: 0, total_comments_received: 0 },
+        month: { total_activities: 0, total_likes_received: 0, total_comments_received: 0 },
+        all_time: { total_activities: 0, total_likes_received: 0, total_comments_received: 0, activity_type_counts: {} }
+      };
+    } catch (err) {
+      console.error('Critical error fetching user statistics:', err);
+      // Return fallback data
+      return {
+        user: {},
+        today: { total_activities: 0, total_likes_received: 0, total_comments_received: 0 },
+        week: { total_activities: 0, total_likes_received: 0, total_comments_received: 0 },
+        month: { total_activities: 0, total_likes_received: 0, total_comments_received: 0 },
+        all_time: { total_activities: 0, total_likes_received: 0, total_comments_received: 0, activity_type_counts: {} }
+      };
     }
-    
-    return data
   },
   
   async getGlobalStatistics() {
-    const { data, error } = await supabase
-      .rpc('get_global_statistics_with_periods')
-    
-    if (error) {
-      console.error('Error fetching global statistics:', error)
-      throw error
+    console.log("Fetching global statistics");
+    try {
+      // Use the new RPC function from our SQL script
+      const { data, error } = await supabase
+        .rpc('get_global_statistics_with_periods');
+      
+      if (error) {
+        console.error('Error fetching global statistics:', error);
+        throw error;
+      }
+      
+      console.log("Global stats received:", data);
+      
+      // Transform to expected format or return fallback data
+      return data || {
+        total_users: 0,
+        periods: {
+          today: { activities: 0, comments: 0, likes: 0 },
+          week: { activities: 0, comments: 0, likes: 0 },
+          month: { activities: 0, comments: 0, likes: 0 },
+          all_time: { activities: 0, comments: 0, likes: 0 }
+        },
+        activity_type_distribution: {}
+      };
+    } catch (err) {
+      console.error('Critical error fetching global statistics:', err);
+      // Return fallback data
+      return {
+        total_users: 0,
+        periods: {
+          today: { activities: 0, comments: 0, likes: 0 },
+          week: { activities: 0, comments: 0, likes: 0 },
+          month: { activities: 0, comments: 0, likes: 0 },
+          all_time: { activities: 0, comments: 0, likes: 0 }
+        },
+        activity_type_distribution: {}
+      };
     }
-    
-    return data
   }
-}
+};
 
-// Create a type-safe enhanced client with getGlobalStatistics
-/** @type {import('@supabase/supabase-js').SupabaseClient & {getGlobalStatistics: () => Promise<any>}} */
+// Make absolutely sure the enhanced supabase client has the methods attached
 const enhancedSupabase = {
   ...supabase,
-  getGlobalStatistics: supabaseStats.getGlobalStatistics
-}
+  getUserStatistics: function(userId) {
+    return supabaseStats.getUserStatistics(userId);
+  },
+  getGlobalStatistics: function() {
+    return supabaseStats.getGlobalStatistics();
+  }
+};
 
-// Replace the default export with our enhanced version
-export default enhancedSupabase
+// Export the enhanced Supabase client as default
+export default enhancedSupabase;

@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../pages/HomeView.vue'
+import WorkoutStatsPage from '../pages/WorkoutStatsPage.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -25,9 +26,21 @@ const router = createRouter({
       component: () => import('../pages/SignUpView.vue')
     },
     {
+      path: '/workout-stats',
+      name: 'WorkoutStats',
+      component: WorkoutStatsPage,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/workout-stats/:userId',
+      name: 'UserWorkoutStats',
+      component: WorkoutStatsPage,
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
-      component: () => import('../pages/NotFoundView.vue')
+      component: () => import('../pages/NotFound.vue')
     }
   ]
 })

@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue';
 import { supabase, supabaseActivities } from '../services/supabase';
 import { authService } from '../services/api';
+import { mockDataService } from '../services/mockDataService';
+import { checkServerHealth } from '../utils/serverHealth';
 import type { Activity, User } from '../types';
 
 const page = 'My Activity';
@@ -9,6 +11,8 @@ const currentUser = ref<User | null>(null);
 const activities = ref<Activity[]>([]);
 const loading = ref(true);
 const error = ref('');
+const showingSampleData = ref(false);
+const retryCount = ref(0);
 
 // Format date helper
 const formatDate = (dateString: string) => {
@@ -24,16 +28,64 @@ const formatDate = (dateString: string) => {
 // Get current user
 const getCurrentUser = async () => {
   try {
-    const response = await authService.getCurrentUser();
+    loading.value = true;
+    error.value = ''; // Clear any previous errors
+    
+    // Check server connectivity first
+    const serverHealth = await checkServerHealth();
+    if (!serverHealth.online) {
+      console.warn('Server health check failed:', serverHealth);
+      error.value = `Server is offline. ${serverHealth.error || ''}`;
+      await fetchSampleActivities();
+      return;
+    }
+    
+    // Add a timeout to prevent infinite loading
+    const userPromise = authService.getCurrentUser();
+    const timeoutPromise = new Promise<{user: null}>(resolve => 
+      setTimeout(() => resolve({user: null}), 8000)
+    );
+    
+    // Race between the actual request and a timeout
+    const response = await Promise.race([userPromise, timeoutPromise]);
+    
     if (response && response.user) {
       currentUser.value = response.user;
       // Once we have the user, get their activities
       await fetchUserActivities();
+    } else {
+      // Try to get user from localStorage as fallback
+      try {
+        const localUser = localStorage.getItem('currentUser');
+        if (localUser) {
+          const parsedUser = JSON.parse(localUser);
+          if (parsedUser && parsedUser.id) {
+            console.log('Using localStorage user:', parsedUser.id);
+            currentUser.value = parsedUser;
+            await fetchUserActivities();
+            return;
+          }
+        }
+      } catch (parseErr) {
+        console.error('Error parsing localStorage user:', parseErr);
+      }
+      
+      // If still no user, show sample data
+      await fetchSampleActivities();
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to get current user:', err);
-    error.value = 'Failed to authenticate user';
+    // Improve error message with more context
+    if (err.message && err.message.includes('Proxy error')) {
+      error.value = 'Server is offline. Proxy error: Unable to connect to API server';
+    } else if (err.message && err.message.includes('fetch')) {
+      error.value = 'Network error: Unable to reach the server';
+    } else {
+      error.value = `Failed to authenticate user: ${err.message || 'Unknown error'}`;
+    }
     loading.value = false;
+    // Try sample data as last resort
+    await fetchSampleActivities();
   }
 };
 
@@ -46,18 +98,168 @@ const fetchUserActivities = async () => {
   }
 
   try {
-    // Get activities from Supabase
-    const result = await supabaseActivities.getUserActivities(currentUser.value.id);
-    
-    if (result && result.success && result.items) {
-      activities.value = result.items;
-    } else {
-      error.value = 'No activities found';
+    // Check server connectivity before trying to fetch activities
+    const serverHealth = await checkServerHealth();
+    if (!serverHealth.online) {
+      console.warn('Server health check failed before fetching activities:', serverHealth);
+      error.value = `Server is offline. ${serverHealth.error || ''}`;
+      await fetchSampleActivities();
+      return;
     }
-  } catch (err) {
+
+    // Add timeout to prevent hanging
+    const activityPromise = supabaseActivities.getUserActivities(currentUser.value.id);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Request timed out')), 10000)
+    );
+    
+    // Race between the actual request and a timeout
+    const result = await Promise.race([activityPromise, timeoutPromise]);
+    
+    if (result && result.success && result.items && result.items.length > 0) {
+      // Simplify user information to only show name
+      activities.value = result.items.map(activity => ({
+        ...activity,
+        user: {
+          name: 'You', // Simplify user display to just "You" for the current user
+          id: activity.user?.id || currentUser.value?.id
+        }
+      }));
+      showingSampleData.value = false;
+    } else {
+      console.warn('No activities found or empty result:', result);
+      await fetchSampleActivities();
+    }
+  } catch (err: any) {
     console.error('Failed to load activities:', err);
-    error.value = 'Failed to load activities';
+    // Enhanced error handling with more specific messages
+    if (err.message && err.message.includes('timeout')) {
+      error.value = 'Request timeout: Server took too long to respond';
+    } else if (err.message && err.message.includes('Proxy error')) {
+      error.value = 'Server is offline. Proxy error: Unable to connect to API server';
+    } else if (err.message && err.message.includes('fetch')) {
+      error.value = 'Network error: Unable to reach the server';
+    } else {
+      error.value = `Failed to load activities: ${err.message || 'Unknown error'}`;
+    }
+    
+    // Check server health to see if it's a connectivity issue
+    checkServerHealth().then(health => {
+      if (!health.online) {
+        error.value = `Server is offline. ${health.error || ''}`;
+      }
+    });
+    await fetchSampleActivities();
   } finally {
+    loading.value = false;
+  }
+};
+
+// Fetch sample activities when API is unavailable
+const fetchSampleActivities = async () => {
+  showingSampleData.value = true;
+  console.log("Loading sample activities (API is unavailable)");
+  
+  try {
+    // Get mock activities from the mockDataService
+    let sampleActivities = mockDataService.getDefaultActivities();
+    
+    // If no mock activities are returned or the function doesn't exist
+    if (!sampleActivities || !Array.isArray(sampleActivities) || sampleActivities.length === 0) {
+      console.log("Creating fallback mock activities");
+      
+      // Generate some basic mock activities as fallback
+      sampleActivities = [
+        {
+          id: 'mock-001',
+          title: 'Morning Run',
+          description: 'Quick 5K run around the park',
+          type: 'running',
+          created_at: new Date().toISOString(),
+          user: {
+            id: 'current-user',
+            name: 'You',
+            profilePicture: 'https://randomuser.me/api/portraits/men/32.jpg'
+          },
+          likes: 5,
+          comments: 2
+        },
+        {
+          id: 'mock-002',
+          title: 'Evening Yoga',
+          description: 'Relaxing yoga session at home',
+          type: 'yoga',
+          created_at: new Date(Date.now() - 86400000).toISOString(),
+          user: {
+            id: 'current-user',
+            name: 'You',
+            profilePicture: 'https://randomuser.me/api/portraits/men/32.jpg'
+          },
+          likes: 3,
+          comments: 1
+        }
+      ];
+    }
+    
+    // Only modify user name for activities that belong to current user
+    if (currentUser.value && currentUser.value.id) {
+      sampleActivities = sampleActivities.map(activity => {
+        // Only change user name to "You" if this activity belongs to current user
+        if (activity.user && 
+            (activity.user.id === currentUser.value?.id || 
+             activity.user.id === 'mock-user-001' || 
+             activity.user.id === 'current-user')) {
+          return {
+            ...activity,
+            user: {
+              ...activity.user,
+              name: 'You'
+            }
+          };
+        }
+        // Keep original user info for activities from other users
+        return activity;
+      });
+      
+      // Filter to show only current user's activities if we're on My Activities page
+      sampleActivities = sampleActivities.filter(
+        a => a.user && (a.user.id === currentUser.value?.id || 
+                        a.user.id === 'mock-user-001' || 
+                        a.user.id === 'current-user')
+      );
+    }
+    
+    activities.value = sampleActivities;
+    error.value = '';
+  } catch (err) {
+    console.error('Error loading sample activities:', err);
+    activities.value = [];
+    error.value = 'Could not load any activities. Please try again later.';
+  } finally {
+    loading.value = false;
+  }
+};
+
+// Try loading data again
+const retryLoading = async () => {
+  loading.value = true;
+  error.value = '';
+  retryCount.value++;
+  
+  // First check if the server is online
+  try {
+    const health = await checkServerHealth();
+    if (!health.online) {
+      error.value = `Server is still offline. ${health.error || ''}`;
+      loading.value = false;
+      return;
+    }
+    // If server is online, proceed with regular loading
+    await getCurrentUser();
+  } catch (err) {
+    console.error('Error checking server health during retry:', err);
+    error.value = 'Unable to check server status. Using sample data.';
+    await fetchSampleActivities();
     loading.value = false;
   }
 };
@@ -157,13 +359,27 @@ onMounted(() => {
   <main>
     <h1 class="title">{{ page }}</h1>
     
+    <div v-if="showingSampleData" class="notification is-warning">
+      <p><strong>Note:</strong> Showing sample data because we couldn't connect to the server.</p>
+    </div>
+    
     <div class="activities-container">
       <div v-if="loading" class="loading">
         <p>Loading activities...</p>
+        <progress class="progress is-primary" max="100"></progress>
       </div>
       
       <div v-else-if="error" class="error">
-        <p>{{ error }}</p>
+        <div class="error-message">
+          <i class="fas fa-exclamation-triangle"></i>
+          <p>{{ error }}</p>
+          <div v-if="error.includes('Server is offline') || error.includes('Proxy error')" class="connection-details">
+            <p class="connection-tip">The server might be temporarily down or your internet connection is unstable.</p>
+          </div>
+        </div>
+        <button @click="retryLoading" class="btn retry-btn">
+          <i class="fas fa-sync"></i> Try Again
+        </button>
       </div>
       
       <div v-else-if="activities.length === 0" class="empty-state">
@@ -448,5 +664,59 @@ onMounted(() => {
   padding: 10px 20px;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.notification {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border-radius: 4px;
+  background-color: #856404;
+  color: #fff3cd;
+}
+
+.progress {
+  display: block;
+  margin: 1rem auto;
+  height: 8px;
+}
+
+.retry-btn {
+  margin-top: 1rem;
+  background-color: var(--accent-color);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+
+.retry-btn:hover {
+  background-color: var(--highlight);
+}
+
+.error-message {
+  background-color: rgba(255, 59, 48, 0.1);
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.error-message i {
+  color: #ff3b30;
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.connection-details {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.connection-tip {
+  margin-top: 0.5rem;
+  font-style: italic;
 }
 </style>

@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { supabase, supabaseFriends } from '../services/supabase';
 import { authService } from '../services/api';
-import { mockDataService } from '../services/mockDataService';
+import mockDataService from '../services/mockDataService'; // Fix import to match MyActivityView
 import type { Activity, User } from '../types';
 
 const page = 'Friends Activity';
@@ -81,9 +81,26 @@ const getCurrentUser = async () => {
 const fetchSampleActivities = async () => {
   showingSampleData.value = true;
   console.log("Loading sample activities (API is unavailable)");
-  activities.value = mockDataService.getDefaultActivities();
-  error.value = 'Unable to connect to server. Showing sample activities instead.';
-  console.log("Sample data loaded:", activities.value);
+  
+  try {
+    const allMockActivities = mockDataService.getDefaultActivities();
+    
+    if (!allMockActivities || allMockActivities.length === 0) {
+      // Handle empty mock data
+      error.value = 'No sample activities available.';
+      activities.value = [];
+      return;
+    }
+    
+    activities.value = allMockActivities;
+    console.log(`Loaded ${activities.value.length} sample activities`);
+  } catch (err) {
+    console.error('Error loading sample activities:', err);
+    activities.value = [];
+    error.value = 'Unable to load any activities.';
+  } finally {
+    loading.value = false;
+  }
 };
 
 // Fetch friends' activities

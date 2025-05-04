@@ -13,8 +13,11 @@ export const mockDataService = {
         image_url: 'https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=600',
         likes: 5,
         comments: 2,
+        duration: 30,
+        distance: 5,
+        calories: 320,
         user: {
-          id: 'mock-user-001',
+          id: 'mock-user-001', // This ID will match the "current user" in mock mode
           name: 'Demo User',
           email: 'demo@example.com',
           role: 'user',

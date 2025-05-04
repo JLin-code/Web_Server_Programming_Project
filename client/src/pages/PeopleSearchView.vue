@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { userService } from '../services/api';
+import { userService } from '../services'; // Updated import path
 import { friendsService as friendService } from '../services/friendsApi';
 import { supabaseUsers } from '../services/supabase';
 

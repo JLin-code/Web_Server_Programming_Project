@@ -3,7 +3,7 @@ import api from './api';
 export const friendsService = {
   async getFriends(userId: string) {
     try {
-      const response = await api.get(`/friends/user/${userId}`);
+      const response = await api.get(`/friends/${userId}`);
       return response.data;
     } catch (error) {
       console.error('Get friends error:', error);
@@ -83,7 +83,7 @@ export const friendsService = {
 
   async getFriendActivities(userId: string) {
     try {
-      const response = await api.get(`/friends/activities/${userId}`);
+      const response = await api.get(`/friends/${userId}/activities`);
       return response.data;
     } catch (error) {
       console.error('Get friend activities error:', error);

@@ -59,6 +59,7 @@ async function loadDemoUsers() {
     
     // Try to get users directly from API first
     try {
+      // Make sure to use the authService which now has the fixed URL
       const response = await authService.getDemoUsers();
       
       if (response?.success && Array.isArray(response.users) && response.users.length > 0) {

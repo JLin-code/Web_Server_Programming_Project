@@ -117,7 +117,7 @@ const submitForm = async () => {
     };
     
     // Submit to API
-    const response = await activitiesService.create(newActivity);
+    const response = await activitiesService.createActivity(newActivity);
     
     // Reset form
     formData.title = '';

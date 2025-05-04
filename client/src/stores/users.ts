@@ -90,7 +90,7 @@ export const useUsersStore = defineStore('users', () => {
       const startTime = Date.now();
       
       try {
-        // First, check if the API is reachable with a quick ping
+        // Check if API is reachable with correct path format
         const pingResponse = await fetch('/api/ping', { 
           method: 'HEAD',
           cache: 'no-store'
@@ -100,8 +100,9 @@ export const useUsersStore = defineStore('users', () => {
         console.warn('API ping failed:', pingErr);
       }
       
-      // Add a timeout to ensure we wait for the API response
+      // Use the authService directly which should now have the fixed URL
       const result = await Promise.race([
+        // Use the fixed authService method
         authService.getDemoUsers(),
         new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error('API request timeout')), 8000)

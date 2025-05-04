@@ -44,6 +44,7 @@ const getDemoUsers = async () => {
     // Log the request start time
     console.log(`Fetching demo users at ${new Date().toLocaleTimeString()}`);
     
+    // Use a consistent URL format - either with or without /api/v1
     const response = await axios.get('/api/v1/auth/demo-users', {
       timeout: 5000, // Set a reasonable timeout
       headers: {
@@ -109,6 +110,7 @@ const getFallbackDemoUsers = async () => {
 export const authService = {
   login: async (username, password) => {
     try {
+      // Ensure consistent URL format
       const response = await api.post('/api/v1/auth/login', { username, password });
       return response.data;
     } catch (error) {

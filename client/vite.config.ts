@@ -15,7 +15,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
-        // No rewrite needed as we'll use the full path in our API calls
+        secure: false,
       }
     }
   }

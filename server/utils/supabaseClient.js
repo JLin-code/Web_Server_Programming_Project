@@ -237,10 +237,104 @@ async function executeSql(sql) {
   }
 }
 
+/**
+ * Deep check Supabase connection with detailed diagnostics
+ * @returns {Object} Diagnostic information
+ */
+async function diagnoseSupabaseConnection() {
+  const results = {
+    timestamp: new Date().toISOString(),
+    checks: {},
+    issues: []
+  };
+  
+  // Test basic connection
+  try {
+    const startTime = process.hrtime();
+    const { data, error } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1);
+      
+    const hrTime = process.hrtime(startTime);
+    const duration = hrTime[0] * 1000 + hrTime[1] / 1000000;
+    
+    results.checks.basicConnection = {
+      success: !error,
+      duration: `${duration.toFixed(2)}ms`,
+      error: error ? error.message : null
+    };
+    
+    if (error) {
+      results.issues.push(`Basic connection failed: ${error.message}`);
+    }
+  } catch (err) {
+    results.checks.basicConnection = {
+      success: false,
+      error: err.message
+    };
+    results.issues.push(`Connection exception: ${err.message}`);
+  }
+  
+  // Check table access
+  try {
+    const { error } = await supabase
+      .from('users')
+      .select('id')
+      .limit(1);
+      
+    results.checks.tableAccess = {
+      success: !error,
+      error: error ? error.message : null
+    };
+    
+    if (error) {
+      results.issues.push(`Table access failed: ${error.message}`);
+    }
+  } catch (err) {
+    results.checks.tableAccess = {
+      success: false,
+      error: err.message
+    };
+    results.issues.push(`Table access exception: ${err.message}`);
+  }
+  
+  // Check RPC function access
+  try {
+    const { error } = await supabase
+      .rpc('get_global_statistics_with_periods');
+      
+    results.checks.rpcAccess = {
+      success: !error,
+      error: error ? error.message : null
+    };
+    
+    if (error) {
+      results.issues.push(`RPC access failed: ${error.message}`);
+    }
+  } catch (err) {
+    results.checks.rpcAccess = {
+      success: false,
+      error: err.message
+    };
+    results.issues.push(`RPC access exception: ${err.message}`);
+  }
+  
+  // Overall status
+  const allSuccess = Object.values(results.checks)
+    .every(check => check.success);
+  
+  results.summary = allSuccess ? 'All connection checks passed' : 'Some connection checks failed';
+  results.status = allSuccess ? 'healthy' : 'unhealthy';
+  
+  return results;
+}
+
 // Export the client and functions
 module.exports = { 
   supabase,
   executeSql,
   testConnection,
-  enhancedQuery
+  enhancedQuery,
+  diagnoseSupabaseConnection
 };

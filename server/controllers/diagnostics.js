@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { supabase, testConnection } = require('../utils/supabaseClient');
+const { supabase, testConnection, diagnoseSupabaseConnection } = require('../utils/supabaseClient');
 
 // Test database connection
 router.get('/db-connection', async (req, res) => {

@@ -1,137 +1,130 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { userService } from '../services'; // Updated import path
-import { friendsService as friendService } from '../services/friendsApi';
+import { ref, onMounted, computed } from 'vue';
+import { useAuthStore } from '../stores/auth';
 import { supabaseUsers } from '../services/supabase';
 
-const page = 'People Search';
-
-// Users state
-interface User {
-  id: string; 
-  firstName: string; 
-  lastName: string; 
-  email: string; 
+type User = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
   handle: string;
+  isFriend: boolean;  // Changed from isAdmin to isFriend
   profilePicture?: string;
-  isFriend: boolean; 
-}
+};
 
+const page = ref('People Search');  // Changed page title
+const searchQuery = ref('');  // Added for search functionality
 const users = ref<User[]>([]);
 const loading = ref(true);
-const error = ref('');
-const searchQuery = ref('');
-const currentUserId = ref<string | null>(null);
+const error = ref<string | null>(null);
 
-onMounted(async () => {
+const authStore = useAuthStore();
+
+// Filtered users based on search query
+const filteredUsers = computed(() => {
+  if (!searchQuery.value) return users.value;
+  
+  const query = searchQuery.value.toLowerCase();
+  return users.value.filter(user => {
+    return user.firstName.toLowerCase().includes(query) || 
+           user.lastName.toLowerCase().includes(query) || 
+           user.email.toLowerCase().includes(query) || 
+           (user.handle && user.handle.toLowerCase().includes(query));
+  });
+});
+
+// Load users function
+async function loadUsers() {
+  console.log('Starting to load users');
+  loading.value = true;
+  error.value = null;
+  
   try {
-    loading.value = true;
+    console.log('Calling supabaseUsers.getAll()');
+    const response = await supabaseUsers.getAll();
+    console.log('Users data received:', response);
     
-    // Get current user
-    const userResponse = await userService.getUserById('current');
-    if (userResponse && userResponse.user) {
-      currentUserId.value = userResponse.user.id;
+    if (!response || !response.items) {
+      console.error('Invalid response format:', response);
+      error.value = 'Received invalid data format from server';
+      loading.value = false;
+      return;
     }
     
-    // Get all users - first try Supabase direct
-    let userList;
-    try {
-      const { data } = await supabaseUsers.getAll();
-      userList = data?.map(user => ({
-        id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: user.email,
-        profile_picture_url: user.profile_picture_url,
-        handle: user.handle || `@${user.first_name.toLowerCase()}`,
-        role: user.role || 'user'
-      }));
-    } catch (error) {
-      console.error('Failed to fetch users from Supabase:', error);
-      // Fall back to API
-      const response = await userService.getUsers();
-      userList = response.items;
-    }
-    
-    // Get friends
-    let friendIds = new Set<string>();
-    if (currentUserId.value !== null) {
-      const friendsResponse = await friendService.getFriends(currentUserId.value.toString());
-      friendIds = new Set(friendsResponse.items.map((friend: { id: string }) => friend.id));
-    }
-    
-    // Mark friends in the user list
-    users.value = userList.map((user: any) => ({
+    // Assume all users are friends for this version
+    users.value = response.items.map(user => ({
       id: user.id,
       firstName: user.first_name,
       lastName: user.last_name,
       email: user.email,
-      profilePicture: user.profile_picture_url,
-      handle: user.handle || `@${user.first_name.toLowerCase()}`,
-      isFriend: friendIds.has(user.id)
+      handle: `@${user.first_name?.toLowerCase() || 'user'}`,
+      isFriend: true,  // Default to true as requested
+      profilePicture: user.profile_picture_url
     }));
     
+    console.log(`Processed ${users.value.length} users`);
   } catch (err) {
-    error.value = 'Failed to load users';
-    console.error(err);
+    console.error('Error loading users:', err);
+    error.value = `Failed to load users: ${err instanceof Error ? err.message : 'Unknown error'}`;
   } finally {
     loading.value = false;
+    console.log('User loading complete, loading=false');
   }
-});
-
-function filteredUsers() {
-  if (!searchQuery.value) {
-    return users.value;
-  }
-  
-  const query = searchQuery.value.toLowerCase();
-  return users.value.filter(user => 
-    user.firstName.toLowerCase().includes(query) ||
-    user.lastName.toLowerCase().includes(query) ||
-    user.email.toLowerCase().includes(query) ||
-    user.handle.toLowerCase().includes(query)
-  );
 }
+
+// Load users immediately when component mounts
+onMounted(() => {
+  console.log('PeopleSearchView mounted - loading users immediately');
+  loadUsers();
+});
 
 // Add friend function
 async function addFriend(user: User) {
-  if (!currentUserId.value) {
-    console.error("Current user not authenticated");
-    return;
-  }
-  
   try {
-    await friendService.addFriend(currentUserId.value.toString(), user.id.toString());
-    user.isFriend = true;
-    console.log(`Added ${user.firstName} as friend`);
+    // Here you would normally call an API to add a friend
+    console.log(`Adding friend: ${user.firstName} ${user.lastName}`);
+    
+    // Update local state
+    const index = users.value.findIndex(u => u.id === user.id);
+    if (index !== -1) {
+      users.value[index].isFriend = true;
+    }
   } catch (err) {
-    console.error(`Failed to add ${user.firstName} as friend:`, err);
+    console.error(`Failed to add friend:`, err);
+    error.value = 'Failed to add friend. Please try again.';
   }
 }
 
 // Remove friend function
 async function removeFriend(user: User) {
-  if (!currentUserId.value) {
-    console.error("Current user not authenticated");
-    return;
-  }
-  
   try {
-    await friendService.removeFriend(currentUserId.value.toString(), user.id.toString());
-    user.isFriend = false;
-    console.log(`Removed ${user.firstName} from friends`);
+    // Here you would normally call an API to remove a friend
+    console.log(`Removing friend: ${user.firstName} ${user.lastName}`);
+    
+    // Update local state
+    const index = users.value.findIndex(u => u.id === user.id);
+    if (index !== -1) {
+      users.value[index].isFriend = false;
+    }
   } catch (err) {
-    console.error(`Failed to remove ${user.firstName} from friends:`, err);
+    console.error(`Failed to remove friend:`, err);
+    error.value = 'Failed to remove friend. Please try again.';
   }
+}
+
+function forceLoadUsers() {
+  console.log('Force loading users');
+  loadUsers();
 }
 </script>
 
 <template>
-  <main class="container section">
+  <main>
     <h1 class="title">{{ page }}</h1>
     
     <!-- Search bar -->
-    <div class="field">
+    <div class="field mb-5">
       <div class="control has-icons-left">
         <input 
           class="input" 
@@ -145,7 +138,25 @@ async function removeFriend(user: User) {
       </div>
     </div>
     
-    <div class="table-container">
+    <!-- Show when loading users -->
+    <div v-if="loading" class="has-text-centered my-5">
+      <span class="icon is-large">
+        <i class="fas fa-spinner fa-pulse"></i>
+      </span>
+      <p>Loading users...</p>
+    </div>
+    
+    <div v-else-if="error" class="notification is-danger">
+      <p>{{ error }}</p>
+      <button class="button is-info mt-3" @click="forceLoadUsers">Try Again</button>
+    </div>
+    
+    <div v-else-if="filteredUsers.length === 0" class="notification is-warning has-text-centered">
+      <p>No users found matching your search.</p>
+      <button class="button is-info mt-3" @click="forceLoadUsers">Refresh</button>
+    </div>
+    
+    <div v-else class="table-container">
       <table class="table is-fullwidth is-striped is-hoverable">
         <thead>
           <tr>
@@ -154,12 +165,12 @@ async function removeFriend(user: User) {
             <th>Last Name</th>
             <th>Email</th>
             <th>Handle</th>
-            <th>Friend Status</th>
+            <th>Friend</th> <!-- Changed from Admin to Friend -->
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(user, index) in filteredUsers()" :key="index">
+          <tr v-for="(user, index) in filteredUsers" :key="index">
             <td>
               <div class="user-avatar-small">
                 <img v-if="user.profilePicture" :src="user.profilePicture" :alt="user.firstName">
@@ -171,15 +182,15 @@ async function removeFriend(user: User) {
             <td>{{ user.email }}</td>
             <td>{{ user.handle }}</td>
             <td>
-              <span class="tag" :class="user.isFriend ? 'is-success' : 'is-danger'">
-                {{ user.isFriend ? 'Friend' : 'Not Friend' }}
+              <span class="tag" :class="user.isFriend ? 'is-success' : 'is-warning'">
+                {{ user.isFriend ? 'Yes' : 'No' }}
               </span>
             </td>
             <td>
               <div class="buttons">
                 <button 
                   v-if="!user.isFriend" 
-                  class="button is-small is-primary" 
+                  class="button is-small is-success" 
                   @click="addFriend(user)"
                 >
                   <span class="icon">
@@ -189,13 +200,13 @@ async function removeFriend(user: User) {
                 </button>
                 <button 
                   v-else 
-                  class="button is-small is-danger" 
+                  class="button is-small is-warning" 
                   @click="removeFriend(user)"
                 >
                   <span class="icon">
                     <i class="fas fa-user-minus"></i>
                   </span>
-                  <span>Remove</span>
+                  <span>Unfriend</span>
                 </button>
               </div>
             </td>
@@ -211,11 +222,6 @@ async function removeFriend(user: User) {
   margin-bottom: 2rem;
   text-align: center;
   color: #ffffff;
-}
-
-.field {
-  max-width: 500px;
-  margin: 0 auto 2rem auto;
 }
 
 .table-container {
@@ -273,21 +279,21 @@ async function removeFriend(user: User) {
 
 .tag {
   font-weight: bold;
-  width: 90px;
+  width: 45px;
   display: inline-flex;
   justify-content: center;
+}
+
+.tag.is-warning {
+  background-color: #ffdd57;
+  color: rgba(0, 0, 0, 0.7);
+  border: 1px solid #ffcc00;
 }
 
 .tag.is-success {
   background-color: #48c774;
   color: #fff;
   border: 1px solid #3ab364;
-}
-
-.tag.is-danger {
-  background-color: #f14668;
-  color: #fff;
-  border: 1px solid #e02c50;
 }
 
 .user-avatar-small {

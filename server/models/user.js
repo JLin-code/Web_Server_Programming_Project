@@ -134,6 +134,35 @@ const userModel = {
   },
 
   /**
+   * Change user role
+   * @param {string} id - User ID
+   * @param {string} role - New role ('user' or 'admin')
+   * @returns {Promise<Object>} Updated user
+   */
+  async changeRole(id, role) {
+    if (role !== 'user' && role !== 'admin') {
+      throw new Error('Invalid role. Must be "user" or "admin"');
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ role })
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) throw new Error(`Failed to change user role: ${error.message}`);
+      
+      if (DEBUG) console.log(`[User Model] Changed user role: ${id} to ${role}`);
+      return data;
+    } catch (err) {
+      console.error(`[User Model] Error changing role for user ${id}:`, err);
+      throw err;
+    }
+  },
+
+  /**
    * Delete a user
    * @param {string} id - User ID
    * @returns {Promise<boolean>} Success status

@@ -1,8 +1,10 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { supabaseStats } from '../services/supabase';
+import { supabase } from '../services/supabase'; // Added for getCurrentUser
 
-const isDebug = import.meta.env.DEV;
+// Make debug explicitly false unless explicitly enabled through env
+const isDebug = ref(import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEBUG === 'true');
 const loading = ref(true);
 const error = ref(null);
 const statistics = ref({
@@ -121,7 +123,7 @@ onMounted(() => {
 
 <template>
   <div class="home">
-    <!-- Debug info -->
+    <!-- Debug info - only shown when DEBUG is true -->
     <div v-if="isDebug" class="debug-panel debug-panel-visible">
       Component loaded: HomeView
     </div>

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { authService } from '../services/api';
-import axios from 'axios';
+import { supabase } from '../services/supabase';
 
 interface Activity {
   id: string;
@@ -39,15 +39,6 @@ interface UserStatistics {
     };
   };
 }
-
-// Create API client
-const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
 
 // State management
 const loading = ref(true);
@@ -92,73 +83,105 @@ const fetchWorkoutStats = async () => {
       }
     }
     
-    // Fetch user activities and statistics from the server
-    const statsResponse = await apiClient.get(`/api/v1/data/statistics/user/${userId.value}`).catch(err => {
-      console.error("Error fetching user statistics:", err);
-      return null;
-    });
+    // Use Supabase to fetch user statistics
+    const { data: statsData, error: statsError } = await supabase
+      .rpc('get_user_statistics_with_periods', { 
+        user_id_param: userId.value 
+      });
     
-    const activitiesResponse = await apiClient.get(`/api/v1/activities/user/${userId.value}`).catch(err => {
-      console.error("Error fetching user activities:", err);
-      return null;
-    });
+    if (statsError) {
+      console.error("Error fetching user statistics:", statsError);
+      throw new Error(`Failed to fetch statistics: ${statsError.message}`);
+    }
     
-    if (statsResponse?.data?.success) {
-      userStatistics.value = statsResponse.data.statistics;
-    } else {
-      // Fallback data if API fails
+    // Use Supabase to fetch user activities
+    const { data: activitiesData, error: activitiesError } = await supabase
+      .from('activities')
+      .select(`
+        id, title, description, type, duration, distance, calories, created_at,
+        user:user_id (id, first_name, last_name),
+        comment_count, like_count, image_url
+      `)
+      .eq('user_id', userId.value)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    if (activitiesError) {
+      console.error("Error fetching user activities:", activitiesError);
+      throw new Error(`Failed to fetch activities: ${activitiesError.message}`);
+    }
+    
+    // Process statistics data
+    if (statsData) {
       userStatistics.value = {
-        total_activities: 18,
-        total_comments: 12,
-        total_likes_received: 35,
-        activity_type_distribution: {
-          running: 6,
-          cycling: 4,
-          strength: 5,
-          yoga: 2,
-          swimming: 1
-        },
+        total_activities: statsData.total_activities || 0,
+        total_comments: statsData.total_comments || 0,
+        total_likes_received: statsData.total_likes_received || 0,
+        activity_type_distribution: statsData.activity_type_distribution || {},
         periods: {
-          last_week: {
-            activities: 3,
-            likes: 12
-          },
-          last_month: {
-            activities: 10,
-            likes: 28
-          }
+          last_week: statsData.periods?.week || { activities: 0, likes: 0 },
+          last_month: statsData.periods?.month || { activities: 0, likes: 0 }
+        }
+      };
+    } else {
+      // Fallback data if Supabase query returns nothing
+      userStatistics.value = {
+        total_activities: 0,
+        total_comments: 0,
+        total_likes_received: 0,
+        activity_type_distribution: {},
+        periods: {
+          last_week: { activities: 0, likes: 0 },
+          last_month: { activities: 0, likes: 0 }
         }
       };
     }
     
-    if (activitiesResponse?.data?.success) {
-      recentWorkouts.value = activitiesResponse.data.items.slice(0, 10); // Get last 10 activities
+    // Process activities data
+    if (activitiesData && activitiesData.length > 0) {
+      recentWorkouts.value = activitiesData.map(activity => ({
+        id: activity.id,
+        title: activity.title || `Workout on ${new Date(activity.created_at).toLocaleDateString()}`,
+        description: activity.description,
+        type: activity.type || 'workout',
+        duration: activity.duration,
+        distance: activity.distance,
+        calories: activity.calories,
+        date: new Date(activity.created_at).toLocaleDateString(),
+        created_at: activity.created_at,
+        user: activity.user ? {
+          id: activity.user.id,
+          name: `${activity.user.first_name} ${activity.user.last_name}`
+        } : null,
+        likes: activity.like_count || 0,
+        comments: activity.comment_count || 0,
+        image_url: activity.image_url
+      }));
     } else {
-      // Fallback data
-      recentWorkouts.value = [
-        {
-          id: '1',
-          title: 'Morning Run',
-          description: '5K run around the park with sprint intervals',
-          type: 'running',
-          duration: 30,
-          distance: 5.2,
-          calories: 320,
-          date: '2023-10-15',
-          created_at: '2023-10-15T08:30:00Z',
-          user: {
-            id: '1',
-            name: 'You'
-          }
-        },
-        // ... sample activities for demonstration
-      ];
+      recentWorkouts.value = [];
     }
     
-    console.log('Workout stats loaded successfully');
+    console.log('Workout stats loaded successfully', {
+      stats: userStatistics.value,
+      workouts: recentWorkouts.value.length
+    });
   } catch (err) {
     console.error('Failed to load workout statistics:', err);
-    error.value = 'Unable to load workout statistics. Please try again later.';
+    error.value = err instanceof Error ? err.message : 'Unable to load workout statistics. Please try again later.';
+    
+    // Set fallback data in case of error
+    if (!userStatistics.value) {
+      userStatistics.value = {
+        total_activities: 0,
+        total_comments: 0,
+        total_likes_received: 0,
+        activity_type_distribution: {},
+        periods: {
+          last_week: { activities: 0, likes: 0 },
+          last_month: { activities: 0, likes: 0 }
+        }
+      };
+    }
   } finally {
     loading.value = false;
   }

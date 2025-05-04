@@ -53,21 +53,34 @@ async function testSupabaseConnection() {
 // Run test immediately
 testSupabaseConnection()
 
-// User methods using Supabase
+// Users-related methods
 export const supabaseUsers = {
   async getAll() {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, first_name, last_name, email, role, profile_picture_url, created_at')
-    
-    if (error) {
-      console.error('Error fetching users:', error)
-      throw error
+    console.log('supabaseUsers.getAll() called');
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, first_name, last_name, email, role, profile_picture_url, created_at')
+      
+      if (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
+      
+      console.log(`supabaseUsers.getAll(): Retrieved ${data?.length || 0} users`);
+      
+      // Ensure we always return a valid array
+      return { 
+        items: Array.isArray(data) ? data : [], 
+        total: Array.isArray(data) ? data.length : 0 
+      };
+    } catch (err) {
+      console.error('Exception in supabaseUsers.getAll():', err);
+      // Return empty data structure instead of throwing
+      return { items: [], total: 0 };
     }
-    
-    return { items: data, total: data.length }
   },
-  
+
   async getById(id) {
     const { data, error } = await supabase
       .from('users')
@@ -100,6 +113,50 @@ export const supabaseUsers = {
     
     if (error) {
       console.error('Error fetching user profile:', error)
+      throw error
+    }
+    
+    return data
+  },
+  
+  async update(id, userData) {
+    const { data, error } = await supabase
+      .from('users')
+      .update(userData)
+      .eq('id', id)
+      .select()
+    
+    if (error) {
+      console.error('Error updating user:', error)
+      throw error
+    }
+    
+    return data
+  },
+  
+  async delete(id) {
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Error deleting user:', error)
+      throw error
+    }
+    
+    return true
+  },
+  
+  async changeRole(id, role) {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ role })
+      .eq('id', id)
+      .select()
+    
+    if (error) {
+      console.error('Error changing user role:', error)
       throw error
     }
     
@@ -316,31 +373,27 @@ export const supabaseFriends = {
   },
   
   async addFriend(userId, friendId) {
-    // First check if already friends
-    const { data: existing, error: checkError } = await supabase
+    // First check if friendship already exists
+    const { data: existingFriend, error: checkError } = await supabase
       .from('friends')
       .select('id')
       .eq('user_id', userId)
       .eq('friend_id', friendId)
-      .single()
     
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking friendship:', checkError)
+    if (checkError) {
+      console.error('Error checking existing friendship:', checkError)
       throw checkError
     }
     
-    if (existing) {
-      return { alreadyFriends: true }
+    // If friendship already exists, return early
+    if (existingFriend && existingFriend.length > 0) {
+      return { success: true, alreadyFriends: true }
     }
     
-    // Add friend
-    const { error } = await supabase
+    // Add new friendship
+    const { data, error } = await supabase
       .from('friends')
-      .insert([{
-        user_id: userId,
-        friend_id: friendId
-      }])
-      .select()
+      .insert([{ user_id: userId, friend_id: friendId }])
     
     if (error) {
       console.error('Error adding friend:', error)

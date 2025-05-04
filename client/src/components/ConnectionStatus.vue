@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { supabase } from '../services/supabase';
-import { checkSupabaseConnection } from '../utils/networkDiagnostics';
+import { logger } from '../utils/debugConfig';
 
 // Component state
 const isVisible = ref(false);
@@ -13,19 +13,39 @@ const interval = ref(null);
 // Connection check function
 async function checkConnection() {
   try {
-    console.log('Running connection health check...');
-    const result = await checkSupabaseConnection(supabase);
+    logger.debug('Running connection health check...');
     
-    if (result.reachable) {
-      status.value = 'connected';
-      message.value = `Connected (${result.latency}ms)`;
-      isVisible.value = false;
-      retryCount.value = 0;
-    } else {
+    const startTime = Date.now();
+    // Try a simple query first
+    const { data, error } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1)
+      .maybeSingle();
+    
+    const latency = Date.now() - startTime;
+    
+    if (error) {
       status.value = 'error';
-      message.value = result.error || 'Connection issue detected';
+      message.value = error.message || 'Connection issue detected';
       isVisible.value = true;
       retryCount.value++;
+    } else {
+      status.value = 'connected';
+      message.value = `Connected (${latency}ms)`;
+      
+      // Only hide after we've confirmed connection is good
+      if (retryCount.value === 0) {
+        isVisible.value = false;
+      } else {
+        // Show briefly then hide after successful reconnection
+        isVisible.value = true;
+        setTimeout(() => {
+          isVisible.value = false;
+        }, 2000);
+      }
+      
+      retryCount.value = 0;
     }
   } catch (err) {
     status.value = 'error';
@@ -35,25 +55,21 @@ async function checkConnection() {
   }
 }
 
-// Attempt to reconnect manually
-async function reconnect() {
-  status.value = 'checking';
-  message.value = 'Reconnecting...';
-  
-  try {
-    // Clear session and try refreshing
-    await supabase.auth.refreshSession();
-    await checkConnection();
-  } catch (err) {
-    status.value = 'error';
-    message.value = 'Reconnection failed. Please try again.';
-  }
-}
-
-// Setup connection monitoring
+// Setup connection monitoring with a timeout to prevent indefinite loading
 onMounted(() => {
-  // Initial check
-  checkConnection();
+  // Initial check with timeout
+  const initialCheckTimeout = setTimeout(() => {
+    if (status.value === 'checking') {
+      status.value = 'error';
+      message.value = 'Connection check timed out';
+      isVisible.value = true;
+    }
+  }, 5000);
+  
+  // Start the check
+  checkConnection().finally(() => {
+    clearTimeout(initialCheckTimeout);
+  });
   
   // Set up periodic checks
   interval.value = setInterval(() => {
@@ -67,6 +83,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (interval.value) {
     clearInterval(interval.value);
+    interval.value = null;
   }
 });
 </script>

@@ -306,4 +306,37 @@ router.patch('/:id/role', async (req, res) => {
   }
 });
 
+// Check if two users are friends
+router.get('/:userId/friendship/:friendId', async (req, res) => {
+  try {
+    const { userId, friendId } = req.params;
+    
+    // Check if friendship exists
+    const { data, error } = await supabase
+      .from('friends')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('friend_id', friendId);
+    
+    if (error) {
+      console.error('Error checking friendship:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Error checking friendship status'
+      });
+    }
+    
+    return res.json({
+      success: true,
+      isFriend: data && data.length > 0
+    });
+  } catch (error) {
+    console.error('Error checking friendship:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error checking friendship status'
+    });
+  }
+});
+
 module.exports = router;

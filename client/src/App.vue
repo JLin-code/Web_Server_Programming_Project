@@ -3,12 +3,13 @@ import { RouterView } from 'vue-router'
 import { ref, onMounted, onErrorCaptured } from 'vue'
 import NavBar from './components/NavBar.vue'
 import ConnectionStatus from './components/ConnectionStatus.vue'
+import { DEBUG, logger } from './utils/debugConfig'
 
 // App version
 const appVersion = '1.0.0'
 
-// Debug mode - set to false to hide the debug bar
-const debug = ref(false)
+// Debug mode - use our config
+const debug = ref(DEBUG)
 
 // Error handling
 const hasError = ref(false)
@@ -29,7 +30,7 @@ const reloadPage = () => {
 }
 
 onMounted(() => {
-  console.log('App mounted')
+  logger.info('App mounted')
   // Force hasError to false on app mount to ensure content displays
   hasError.value = false
 })

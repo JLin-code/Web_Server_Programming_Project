@@ -136,55 +136,62 @@ export const authService = {
   },
   
   getCurrentUser: async () => {
-    try {
-      // Add retry logic for connection refused errors
-      let retries = 2;
-      let lastError = null;
-      
-      while (retries >= 0) {
-        try {
-          console.log(`Attempting to get current user (${retries} retries left)`);
-          const response = await api.get('/auth/current-user');
-          return response.data;
-        } catch (err) {
-          lastError = err;
-          // Only retry on connection errors
-          if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
-            retries--;
-            if (retries >= 0) {
-              console.log(`Connection failed, retrying ${retries} more times...`);
-              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
-              continue;
-            }
-          } else {
-            break; // Don't retry on non-connection errors
+    let lastError = null;
+    let retries = 2;
+    
+    while (retries >= 0) {
+      try {
+        console.log(`Attempting to get current user (${retries} retries left)`);
+        const response = await api.get('/auth/current-user');
+        return response.data;
+      } catch (err) {
+        lastError = err;
+        
+        // If it's a 401 Unauthorized, the user is simply not logged in - don't retry
+        if (err.response && err.response.status === 401) {
+          console.log('User not authenticated (401) - this is normal for guests');
+          break;
+        }
+        
+        // Only retry on connection errors
+        if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
+          retries--;
+          if (retries >= 0) {
+            console.log(`Connection failed, retrying ${retries} more times...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+            continue;
           }
+        } else {
+          // Log non-401 errors as actual errors
+          console.error(`Get current user failed with ${err.response?.status || 'unknown'} error:`, err);
+          break; // Don't retry on other errors
         }
       }
-      
-      console.error('Get current user error:', lastError);
-      
-      // If server is down, return a standardized offline response
-      if (lastError && (lastError.code === 'ECONNREFUSED' || lastError.code === 'ERR_NETWORK')) {
-        console.warn('API server appears to be offline');
-        return {
-          success: false,
-          message: 'API server is offline or unreachable',
-          offline: true
-        };
-      }
-      
+    }
+    
+    // If server is down, return a standardized offline response
+    if (lastError && (lastError.code === 'ECONNREFUSED' || lastError.code === 'ERR_NETWORK')) {
+      console.warn('API server appears to be offline');
       return {
         success: false,
-        message: lastError instanceof Error ? lastError.message : 'Failed to get current user'
-      };
-    } catch (error) {
-      console.error('Unexpected error in getCurrentUser:', error);
-      return {
-        success: false,
-        message: error instanceof Error ? error.message : 'Failed to get current user'
+        message: 'API server is offline or unreachable',
+        offline: true
       };
     }
+    
+    // For 401 errors, return a standardized unauthorized response
+    if (lastError && lastError.response && lastError.response.status === 401) {
+      return {
+        success: false,
+        message: 'User is not authenticated',
+        unauthorized: true
+      };
+    }
+    
+    return {
+      success: false,
+      message: lastError instanceof Error ? lastError.message : 'Failed to get current user'
+    };
   },
   
   getDemoUsers
@@ -249,30 +256,110 @@ export const userService = {
 // Health service for API health checks
 export const healthService = {
   checkApiHealth: async () => {
+    // Try multiple endpoints in sequence until one works
+    const endpointsToTry = [
+      '/api/v1/health',     // First try dedicated health endpoint
+      '/api/v1/auth/demo-users', // Then try an endpoint we know should exist
+      '/api/v1',            // Then try the base API path
+      '/'                   // Finally try the root as a last resort
+    ];
+    
+    let lastError = null;
+    
+    for (const endpoint of endpointsToTry) {
+      try {
+        console.log(`Checking API health using endpoint: ${endpoint}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+        
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // If we got any response, the server is up
+        return {
+          online: true,
+          endpoint: endpoint,
+          status: response.status,
+          statusText: response.statusText,
+          timestamp: new Date().toISOString()
+        };
+      } catch (error) {
+        console.warn(`API health check failed for ${endpoint}:`, error);
+        lastError = error;
+        // Continue to the next endpoint
+      }
+    }
+    
+    // All endpoints failed
+    return {
+      online: false,
+      error: lastError?.name === 'AbortError' ? 'Request timed out' : lastError?.message || 'All endpoints failed',
+      timestamp: new Date().toISOString()
+    };
+  },
+  
+  // Add a more detailed diagnostics function that provides more information
+  checkApiDiagnostics: async () => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-      
-      const response = await fetch('/api/v1/health', {
-        method: 'GET',
-        signal: controller.signal,
-        headers: { 'Cache-Control': 'no-cache' }
-      });
-      
-      clearTimeout(timeoutId);
-      
-      return {
-        online: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        timestamp: new Date().toISOString()
+      const results = {
+        timestamp: new Date().toISOString(),
+        endpoints: {},
+        corsStatus: 'unknown',
+        overall: false
       };
+      
+      // Test CORS by trying to access the API directly
+      try {
+        const baseUrl = window.location.origin;
+        const corsTest = await fetch(`${baseUrl}/api/v1`, { 
+          method: 'OPTIONS',
+          headers: { 'Origin': baseUrl }
+        });
+        results.corsStatus = corsTest.ok ? 'ok' : `failed: ${corsTest.status}`;
+      } catch (corsErr) {
+        results.corsStatus = `error: ${corsErr.message}`;
+      }
+      
+      // Test various endpoints
+      const endpoints = ['/api/v1/health', '/api/v1/auth/demo-users', '/api/v1', '/'];
+      let anySucceeded = false;
+      
+      for (const endpoint of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2000);
+          
+          const resp = await fetch(endpoint, {
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' }
+          });
+          
+          clearTimeout(timeoutId);
+          results.endpoints[endpoint] = {
+            status: resp.status,
+            ok: resp.ok
+          };
+          
+          if (resp.ok || resp.status < 500) anySucceeded = true;
+        } catch (err) {
+          results.endpoints[endpoint] = {
+            error: err.name === 'AbortError' ? 'timeout' : err.message
+          };
+        }
+      }
+      
+      results.overall = anySucceeded;
+      return results;
     } catch (error) {
-      console.warn('API health check failed:', error);
       return {
-        online: false,
-        error: error.name === 'AbortError' ? 'Request timed out' : error.message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        overall: false,
+        error: error.message
       };
     }
   }

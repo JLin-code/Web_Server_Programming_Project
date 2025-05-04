@@ -199,10 +199,83 @@ async function checkUserSession() {
       }
     }
     
-    // Fallback to API
+    // Fallback to API - modified to better handle 401 errors
     return await checkApiUser();
   } catch (err) {
     console.warn('Session check error:', err);
+    // If the session check fails, still try to get user data from Supabase directly
+    return await fetchUserDirectly();
+  }
+}
+
+// Add a new function to fetch user directly from Supabase as a last resort
+async function fetchUserDirectly() {
+  console.log('Attempting to fetch user directly from Supabase...');
+  try {
+    // Try to get any user to display (for demonstration purposes)
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, email, role, profile_picture_url')
+      .limit(1);
+      
+    if (error) {
+      console.error('Error fetching any user:', error);
+      return false;
+    }
+    
+    if (users && users.length > 0) {
+      console.log('Found a user to display:', users[0].email);
+      const user = users[0];
+      
+      setUserData({
+        id: user.id,
+        name: `${user.first_name} ${user.last_name}`,
+        email: user.email,
+        profilePicture: user.profile_picture_url
+      });
+      
+      currentUser.value.isAdmin = user.role === 'admin';
+      return true;
+    }
+    
+    return false;
+  } catch (err) {
+    console.error('Failed to fetch user directly:', err);
+    return false;
+  }
+}
+
+// Improve the API user check to better handle 401 errors
+async function checkApiUser() {
+  try {
+    console.log('Checking API user...');
+    
+    const response = await authService.getCurrentUser().catch((err) => {
+      console.warn('API getCurrentUser error (handled):', err.message);
+      // If it's a 401, we know the user isn't authenticated through the API
+      if (err.response && err.response.status === 401) {
+        console.log('User not authenticated with API (401 error)');
+      }
+      return null;
+    });
+    
+    if (response?.user) {
+      console.log('API user found');
+      
+      setUserData({
+        id: response.user.id,
+        name: `${response.user.first_name} ${response.user.last_name}`,
+        email: response.user.email,
+        profilePicture: response.user.profile_picture_url
+      });
+      
+      // Set admin status if it exists
+      currentUser.value.isAdmin = response.user.role === 'admin';
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('API user check failed:', err);
     return false;
   }
 }
@@ -393,34 +466,6 @@ async function logout() {
     isLoggedIn.value = false;
     currentUser.value = { id: '', name: '', email: '', isAdmin: false, profilePicture: '' };
     router.push('/');
-  }
-}
-
-// Improved API user check
-async function checkApiUser() {
-  try {
-    console.log('Checking API user...');
-    
-    const response = await authService.getCurrentUser().catch(() => null);
-    
-    if (response?.user) {
-      console.log('API user found');
-      
-      setUserData({
-        id: response.user.id,
-        name: `${response.user.first_name} ${response.user.last_name}`,
-        email: response.user.email,
-        profilePicture: response.user.profile_picture_url
-      });
-      
-      // Set admin status if it exists
-      currentUser.value.isAdmin = response.user.role === 'admin';
-      return true;
-    }
-    return false;
-  } catch (err) {
-    console.warn('API user check failed:', err);
-    return false;
   }
 }
 

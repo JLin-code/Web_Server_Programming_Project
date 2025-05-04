@@ -501,7 +501,7 @@ function debugInfo() {
   };
 }
 
-// IMMEDIATE DATA DISPLAY - NO ASYNC OPERATIONS
+// Modified onMounted to ensure data gets displayed
 onMounted(() => {
   // FORCE DATA TO APPEAR RIGHT NOW
   console.log("IMMEDIATELY SHOWING WORKOUT DATA");
@@ -566,11 +566,20 @@ onMounted(() => {
     }
   ];
 
-  // Skip other functions - they might prevent data from showing
-  console.log("DATA IS SET. IT SHOULD BE SHOWING NOW.");
+  console.log("DATA IS SET. IT SHOULD BE SHOWING NOW:", {
+    userStatsSet: !!userStatistics.value,
+    activitiesCount: recentWorkouts.value.length,
+    isLoading: loading.value
+  });
+  
+  // Also try to fetch real data in the background
+  // This ensures that even if direct setting fails, the normal flow will still work
+  setTimeout(() => {
+    getCurrentUser().catch(err => {
+      console.error("Error in background data fetch:", err);
+    });
+  }, 100);
 });
-
-// Function to immediately display workout statistics without waiting for API
 </script>
 
 <template>
@@ -581,37 +590,52 @@ onMounted(() => {
       <p class="is-size-7 mt-2">This could be due to server issues or network connectivity problems.</p>
     </div>
     
+    <!-- Add a debug toggle button for easier troubleshooting -->
+    <div class="debug-toggle-container" style="text-align: right; margin-bottom: 10px;">
+      <button @click="toggleDebug" class="debug-button">
+        {{ isDebug ? 'Hide' : 'Show' }} Debug Info
+      </button>
+    </div>
+    
     <!-- Debug panel when debug mode is enabled -->
     <div v-if="isDebug" class="debug-panel">
-      <button @click="toggleDebug" class="debug-button">Hide Debug Info</button>
+      <h3>Debug Information</h3>
       <button @click="fetchUserActivities" class="debug-button">Refresh Data</button>
       
       <div class="debug-info">
+        <p><strong>Loading state:</strong> {{ loading }}</p>
+        <p><strong>Error state:</strong> {{ error }}</p>
+        <p><strong>User statistics:</strong> {{ userStatistics ? 'Set' : 'Not set' }}</p>
+        <p><strong>Activities count:</strong> {{ recentWorkouts.length }}</p>
         <pre>{{ JSON.stringify(debugInfo(), null, 2) }}</pre>
       </div>
     </div>
 
+    <!-- Loading state -->
     <div v-if="loading" class="loading-container">
       <p>Loading your workout data...</p>
       <progress class="progress is-primary" max="100"></progress>
     </div>
     
+    <!-- Error state -->
     <div v-else-if="error" class="error-container">
       <p>{{ error }}</p>
       <div class="buttons mt-3">
         <button @click="fetchUserActivities" class="retry-button">Try Again</button>
-        <button @click="toggleDebug" class="debug-button">Show Debug Info</button>
       </div>
     </div>
     
-    <!-- Fixed condition to properly check for empty data -->
-    <div v-else-if="(!userStatistics || userStatistics.total_activities === 0) && recentWorkouts.length === 0" class="empty-state-container">
+    <!-- Empty state - FIXED by improving condition -->
+    <div v-else-if="(!userStatistics || 
+                   (userStatistics.total_activities === 0 && recentWorkouts.length === 0))" 
+         class="empty-state-container">
       <p>Your workout statistics will appear here once you've logged some activities.</p>
       <div class="buttons mt-3 is-centered">
         <button @click="$router.push('/my-activity')" class="action-button">Add Your First Workout</button>
       </div>
     </div>
     
+    <!-- Stats display - now should show correctly -->
     <div v-else class="stats-container">
       <!-- Workout Summary Section -->
       <section class="summary-section">

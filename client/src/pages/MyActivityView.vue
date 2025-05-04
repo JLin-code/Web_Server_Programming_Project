@@ -16,6 +16,24 @@ const authRetries = ref(0);
 const MAX_AUTH_RETRIES = 2;
 const showingSampleData = ref(false);
 
+// Add debug mode to help troubleshoot
+const isDebugMode = ref(false);
+const debugInfo = ref({
+  connectionStatus: 'Unknown',
+  databaseAccessible: false,
+  lastError: '',
+  activities: [],
+  userIds: []
+});
+
+const toggleDebug = () => {
+  isDebugMode.value = !isDebugMode.value;
+  console.log('Debug mode:', isDebugMode.value);
+  if (isDebugMode.value) {
+    checkDatabaseConnection();
+  }
+};
+
 // Format date helper
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -25,6 +43,105 @@ const formatDate = (dateString: string) => {
     hour: '2-digit',
     minute: '2-digit'
   });
+};
+
+// Check if we can connect to the database at all
+const checkDatabaseConnection = async () => {
+  try {
+    debugInfo.value.connectionStatus = 'Checking...';
+    
+    // First check if we can access the database
+    const startTime = Date.now();
+    const { data, error } = await supabase
+      .from('activities')
+      .select('count()', { count: 'exact', head: true });
+      
+    if (error) {
+      debugInfo.value.connectionStatus = 'Error';
+      debugInfo.value.lastError = error.message;
+      debugInfo.value.databaseAccessible = false;
+      return;
+    }
+    
+    const duration = Date.now() - startTime;
+    debugInfo.value.connectionStatus = `Connected (${duration}ms)`;
+    debugInfo.value.databaseAccessible = true;
+    
+    // Get sample of activities in database
+    const { data: sampleActivities, error: sampleError } = await supabase
+      .from('activities')
+      .select('id, user_id, title')
+      .limit(5);
+      
+    if (!sampleError && sampleActivities) {
+      debugInfo.value.activities = sampleActivities;
+      
+      // Get unique user IDs from activities
+      const userIds = [...new Set(sampleActivities.map(a => a.user_id))];
+      debugInfo.value.userIds = userIds;
+    }
+  } catch (err) {
+    debugInfo.value.connectionStatus = 'Error';
+    debugInfo.value.lastError = err.message || 'Unknown error';
+    debugInfo.value.databaseAccessible = false;
+  }
+};
+
+// Test using another user ID from the database
+const testWithUserId = async (userId: string) => {
+  try {
+    const { data: testActivities, error: testError } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(3);
+      
+    if (testError) {
+      alert(`Error testing with user ID ${userId}: ${testError.message}`);
+      return;
+    }
+    
+    if (testActivities && testActivities.length > 0) {
+      alert(`Success! Found ${testActivities.length} activities for user ${userId}`);
+    } else {
+      alert(`No activities found for user ${userId}`);
+    }
+  } catch (err) {
+    alert(`Error: ${err.message || 'Unknown error'}`);
+  }
+};
+
+// Create a test activity for the current user
+const createTestActivity = async () => {
+  if (!currentUser.value?.id) {
+    alert('No current user to create activity for');
+    return;
+  }
+  
+  try {
+    const newActivity = {
+      user_id: currentUser.value.id,
+      title: 'Test Activity',
+      description: 'Created from debug panel',
+      type: 'test',
+      created_at: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase
+      .from('activities')
+      .insert([newActivity])
+      .select();
+      
+    if (error) {
+      alert(`Error creating test activity: ${error.message}`);
+      return;
+    }
+    
+    alert('Test activity created successfully!');
+    fetchUserActivities(); // Refresh activities
+  } catch (err) {
+    alert(`Error: ${err.message || 'Unknown error'}`);
+  }
 };
 
 // Get current user with retry logic - similar to FriendsActivityView approach
@@ -90,6 +207,11 @@ const fetchUserActivities = async () => {
   try {
     console.log(`Fetching activities for user ${currentUser.value.id}`);
     
+    // Debug user info to make sure it matches what's in the database
+    if (isDebugMode.value) {
+      console.log('Current user object:', JSON.stringify(currentUser.value));
+    }
+    
     // Get activities for the current user
     const { data: activitiesData, error: activitiesError } = await supabase
       .from('activities')
@@ -109,13 +231,50 @@ const fetchUserActivities = async () => {
       .order('created_at', { ascending: false });
       
     if (activitiesError) {
-      console.error("Error fetching user activities:", activitiesError);
+      // Improve error logging to show detailed error information
+      console.error("Error fetching user activities:", {
+        message: activitiesError.message,
+        details: activitiesError.details,
+        hint: activitiesError.hint,
+        code: activitiesError.code
+      });
+      
+      // Try a simpler query to see if it's a query structure issue
+      console.log("Trying simpler query to debug...");
+      const { data: simpleCheck, error: simpleError } = await supabase
+        .from('activities')
+        .select('id, user_id')
+        .limit(5);
+        
+      if (simpleError) {
+        console.error("Simple query also failed:", simpleError);
+      } else {
+        console.log("Simple query succeeded, found activities:", simpleCheck);
+        if (simpleCheck && simpleCheck.length > 0) {
+          console.log("Sample user_ids in database:", simpleCheck.map(a => a.user_id));
+        }
+      }
+      
       await fetchSampleActivities();
       return;
     }
     
     if (!activitiesData || activitiesData.length === 0) {
-      console.warn("No activities found for this user");
+      console.warn(`No activities found for user ID: ${currentUser.value.id}`);
+      
+      // Check if there are any activities in the database at all
+      const { data: anyActivities } = await supabase
+        .from('activities')
+        .select('id, user_id')
+        .limit(5);
+        
+      if (anyActivities && anyActivities.length > 0) {
+        console.log("Activities exist but none for this user. Sample user_ids:", 
+          anyActivities.map(a => a.user_id));
+      } else {
+        console.log("No activities found in the database at all");
+      }
+      
       await fetchSampleActivities();
       return;
     }
@@ -336,8 +495,93 @@ onMounted(() => {
   <main>
     <h1 class="title">{{ page }}</h1>
     
+    <!-- Add debug button -->
+    <button @click="toggleDebug" class="debug-button" title="Toggle Debug Mode">
+      🐞
+    </button>
+    
     <div v-if="showingSampleData" class="notification is-warning">
       <p><strong>Note:</strong> Showing sample data because we couldn't connect to the server.</p>
+    </div>
+    
+    <!-- Add current user debug info -->
+    <div v-if="isDebugMode" class="debug-info">
+      <h3>Debug Info</h3>
+      <div class="debug-section">
+        <h4>Current User</h4>
+        <p><strong>ID:</strong> {{ currentUser?.id || 'None' }}</p>
+        <p><strong>Name:</strong> {{ currentUser?.first_name }} {{ currentUser?.last_name }}</p>
+        <p><strong>Email:</strong> {{ currentUser?.email }}</p>
+        <p><strong>Role:</strong> {{ currentUser?.role }}</p>
+        <p><strong>Is Sample Data:</strong> {{ showingSampleData ? 'Yes' : 'No' }}</p>
+        <div class="debug-actions">
+          <button @click="fetchUserActivities" class="button is-small is-info">
+            Retry Fetch
+          </button>
+          <button @click="createTestActivity" class="button is-small is-success">
+            Create Test Activity
+          </button>
+        </div>
+      </div>
+      
+      <div class="debug-section">
+        <h4>Database Connection</h4>
+        <p><strong>Status:</strong> {{ debugInfo.connectionStatus }}</p>
+        <p><strong>Database Accessible:</strong> {{ debugInfo.databaseAccessible ? 'Yes' : 'No' }}</p>
+        <p v-if="debugInfo.lastError" class="error-text">{{ debugInfo.lastError }}</p>
+        <button @click="checkDatabaseConnection" class="button is-small is-info">
+          Check Connection
+        </button>
+      </div>
+      
+      <div v-if="debugInfo.activities.length > 0" class="debug-section">
+        <h4>Sample Activities in Database</h4>
+        <table class="debug-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>User ID</th>
+              <th>Title</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="activity in debugInfo.activities" :key="activity.id">
+              <td>{{ activity.id }}</td>
+              <td>{{ activity.user_id }}</td>
+              <td>{{ activity.title }}</td>
+              <td>
+                <button 
+                  @click="testWithUserId(activity.user_id)" 
+                  class="button is-small is-link"
+                  title="Test fetching activities with this user ID"
+                >
+                  Test
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div v-if="debugInfo.userIds.length > 0" class="debug-section">
+        <h4>User IDs with Activities</h4>
+        <div class="user-ids-list">
+          <div v-for="userId in debugInfo.userIds" :key="userId" class="user-id-item">
+            <code>{{ userId }}</code>
+            <button @click="testWithUserId(userId)" class="button is-small is-link">
+              Test User ID {{ userId }}
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="debug-section">
+        <h4>Actions</h4>
+        <button @click="fetchSampleActivities" class="button is-small is-warning">
+          Load Sample Data
+        </button>
+      </div>
     </div>
     
     <div class="activities-container">
@@ -711,5 +955,99 @@ onMounted(() => {
   background-color: #3298dc;
   color: #fff;
   margin-bottom: 1.5rem;
+}
+
+.debug-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #333;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  border: none;
+  z-index: 100;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.debug-button:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.debug-info {
+  margin: 1rem auto;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  max-width: 800px;
+  margin-bottom: 2rem;
+  border: 1px dashed #666;
+}
+
+.debug-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+}
+
+.debug-section h4 {
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  color: #7bb7e4;
+}
+
+.debug-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.debug-table {
+  width: 100%;
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+}
+
+.debug-table th, 
+.debug-table td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #444;
+}
+
+.user-ids-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.user-id-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.error-text {
+  color: #ff6b6b;
+}
+
+code {
+  font-family: monospace;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
 }
 </style>

@@ -4,14 +4,49 @@ const cors = require('cors');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
+const http = require('http');
 
-// Import controllers - fix the auth controller import
-const userController = require('./controllers/users');
-const { router: authController, verifyToken } = require('./controllers/auth');  // Import as an object and extract router
-const friendsController = require('./controllers/friends');
+// Import Supabase utilities
+const { supabase, testConnection } = require('./utils/supabaseClient');
+
+// Add environment variable validation early in startup
+const { checkSupabaseConfig } = require('./utils/env-checker');
+checkSupabaseConfig();
+
+// Import controllers with error handling for missing modules
+function safeRequire(modulePath) {
+  try {
+    return require(modulePath);
+  } catch (err) {
+    if (err.code === 'MODULE_NOT_FOUND') {
+      console.warn(`Warning: Module not found - ${modulePath}`);
+      // Return a simple router that returns 501 Not Implemented
+      const router = express.Router();
+      router.all('*', (req, res) => {
+        res.status(501).json({ 
+          success: false, 
+          message: 'This functionality is not yet implemented'
+        });
+      });
+      return router;
+    }
+    throw err;
+  }
+}
+
+// Import controllers with safe require
+const authController = require('./controllers/auth');
+const usersController = require('./controllers/users');
 const activitiesController = require('./controllers/activities');
+const friendsController = safeRequire('./controllers/friends');
+const commentsController = safeRequire('./controllers/comments');
+const systemController = safeRequire('./controllers/system');
 
-const PORT = process.env.PORT ?? 3000;
+// Use environment variable or default port, with fallback logic
+const DEFAULT_PORT = 3000;
+const PORT = process.env.PORT || DEFAULT_PORT;
+const MAX_PORT_ATTEMPTS = 10; // Try up to 10 ports before giving up
+
 const app = express();
 
 // Define allowed origins
@@ -38,6 +73,40 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Create server but don't start listening yet
+const server = http.createServer(app);
+
+// Function to attempt listening on a port, and try the next one if it fails
+function startServer(port, attempt = 1) {
+  server.listen(port, '0.0.0.0')
+    .on('listening', async () => {
+      const actualPort = server.address().port;
+      console.log(`Server is running on port ${actualPort}`);
+      console.log(`http://localhost:${actualPort}`);
+      
+      // Test Supabase connection on server start
+      console.log('Testing Supabase connection...');
+      await testConnection();
+      
+      if (clientDistExists) {
+        console.log('\x1b[32m%s\x1b[0m', `Client app is being served from ${clientDistPath}`);
+      } else {
+        console.log('\x1b[33m%s\x1b[0m', 'Note: Client app is not built. Using remote client at https://clientsidewebsite.onrender.com');
+      }
+    })
+    .on('error', (err) => {
+      if (err.code === 'EADDRINUSE' && attempt < MAX_PORT_ATTEMPTS) {
+        const nextPort = port + 1;
+        console.log(`Port ${port} is already in use, trying port ${nextPort}...`);
+        server.close();
+        startServer(nextPort, attempt + 1);
+      } else {
+        console.error('Error starting server:', err);
+        process.exit(1);
+      }
+    });
+}
 
 // Check if client dist directory exists before trying to serve it
 const clientDistPath = path.join(__dirname, '../client/dist');
@@ -73,8 +142,16 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'UP', timestamp: new Date() });
 });
 
+// Register API routes
+app.use('/api/v1/auth', authController);
+app.use('/api/v1/users', usersController);
+app.use('/api/v1/activities', activitiesController);
+app.use('/api/v1/friends', friendsController);
+app.use('/api/v1/comments', commentsController);
+if (systemController) app.use('/api', systemController);
+
 // Protected routes - require authentication
-app.use('/api/v1/users', verifyToken, userController);
+app.use('/api/v1/users', verifyToken, usersController);
 app.use('/api/v1/friends', verifyToken, friendsController);
 app.use('/api/v1/activities', verifyToken, activitiesController);
 
@@ -131,14 +208,8 @@ app.use((err, req, res, next) => {
   res.status(status).json(error);
 });
 
-// Start the server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`http://localhost:${PORT}`);
-  
-  if (clientDistExists) {
-    console.log('\x1b[32m%s\x1b[0m', `Client app is being served from ${clientDistPath}`);
-  } else {
-    console.log('\x1b[33m%s\x1b[0m', 'Note: Client app is not built. Using remote client at https://clientsidewebsite.onrender.com');
-  }
-});
+// Start the server with automatic port selection
+startServer(PORT);
+
+// Export the app for testing
+module.exports = app;

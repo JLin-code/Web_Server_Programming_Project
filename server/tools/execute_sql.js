@@ -57,10 +57,35 @@ async function executeSqlFiles(directory) {
   }
 }
 
+// Check for SQL directories in clean server-only paths
+const sqlDirectories = [
+  path.join(__dirname, '..', 'sql'),
+  path.join(__dirname, '..', 'database', 'migrations'),
+  path.join(__dirname, '..', 'database')
+];
+
 // If this script is run directly, execute SQL files from command line arguments
 if (require.main === module) {
-  // Check for directory argument
-  const directory = process.argv[2] || path.join(__dirname, '..', 'sql');
+  // Check for directory argument or use default paths
+  let directory = process.argv[2];
+  
+  if (!directory) {
+    // Try to find a valid SQL directory
+    for (const dir of sqlDirectories) {
+      try {
+        fs.access(dir);
+        directory = dir;
+        break;
+      } catch (err) {
+        // Directory doesn't exist, try next one
+      }
+    }
+    
+    // If still no directory found, use default
+    if (!directory) {
+      directory = path.join(__dirname, '..', 'sql');
+    }
+  }
   
   console.log(`Executing SQL files from: ${directory}`);
   executeSqlFiles(directory)
@@ -76,5 +101,6 @@ if (require.main === module) {
 
 module.exports = {
   executeSqlFile,
-  executeSqlFiles
+  executeSqlFiles,
+  sqlDirectories
 };

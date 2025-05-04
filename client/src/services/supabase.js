@@ -27,9 +27,6 @@ export const supabase = createClient(
   }
 )
 
-// Also export as default for flexibility
-export default supabase;
-
 // Test connection with better error handling
 async function testSupabaseConnection() {
   try {
@@ -61,7 +58,7 @@ export const supabaseUsers = {
   async getAll() {
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('id, first_name, last_name, email, role, profile_picture_url, created_at')
     
     if (error) {
       console.error('Error fetching users:', error)
@@ -74,7 +71,7 @@ export const supabaseUsers = {
   async getById(id) {
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('id, first_name, last_name, email, role, profile_picture_url, created_at')
       .eq('id', id)
       .single()
     
@@ -94,7 +91,8 @@ export const supabaseUsers = {
         first_name, 
         last_name, 
         email, 
-        role, 
+        role,
+        profile_picture_url, 
         created_at
       `)
       .eq('id', userId)
@@ -117,12 +115,12 @@ export const supabaseActivities = {
       .select(`
         *,
         user:user_id (
-          id, first_name, last_name, email, role
+          id, first_name, last_name, email, role, profile_picture_url
         ),
         comments:activity_comments (
           id, user_id, comment, created_at,
           user:user_id (
-            id, first_name, last_name
+            id, first_name, last_name, profile_picture_url
           )
         )
       `)
@@ -143,7 +141,8 @@ export const supabaseActivities = {
           id: activity.user.id,
           name: `${activity.user.first_name} ${activity.user.last_name}`,
           email: activity.user.email,
-          role: activity.user.role
+          role: activity.user.role,
+          profilePicture: activity.user.profile_picture_url
         } : null,
         comments: activity.comments ? activity.comments.map(comment => ({
           id: comment.id,
@@ -151,7 +150,8 @@ export const supabaseActivities = {
           created_at: comment.created_at,
           user: comment.user ? {
             id: comment.user.id,
-            name: `${comment.user.first_name} ${comment.user.last_name}`
+            name: `${comment.user.first_name} ${comment.user.last_name}`,
+            profilePicture: comment.user.profile_picture_url
           } : null
         })) : []
       }))
@@ -164,12 +164,12 @@ export const supabaseActivities = {
       .select(`
         *,
         user:user_id (
-          id, first_name, last_name, email, role
+          id, first_name, last_name, email, role, profile_picture_url
         ),
         comments:activity_comments (
           id, user_id, comment, created_at,
           user:user_id (
-            id, first_name, last_name
+            id, first_name, last_name, profile_picture_url
           )
         )
       `)
@@ -190,7 +190,8 @@ export const supabaseActivities = {
           id: activity.user.id,
           name: `${activity.user.first_name} ${activity.user.last_name}`,
           email: activity.user.email,
-          role: activity.user.role
+          role: activity.user.role,
+          profilePicture: activity.user.profile_picture_url
         } : null,
         comments: activity.comments ? activity.comments.map(comment => ({
           id: comment.id,
@@ -198,7 +199,8 @@ export const supabaseActivities = {
           created_at: comment.created_at,
           user: comment.user ? {
             id: comment.user.id,
-            name: `${comment.user.first_name} ${comment.user.last_name}`
+            name: `${comment.user.first_name} ${comment.user.last_name}`,
+            profilePicture: comment.user.profile_picture_url
           } : null
         })) : []
       }))
@@ -254,27 +256,20 @@ export const supabaseActivities = {
   },
   
   async likeActivity(activityId, userId) {
-    const { error } = await supabase
-      .from('activity_likes')
-      .insert([{
-        activity_id: activityId,
-        user_id: userId
-      }])
-      .select()
-    
-    if (error) {
-      // If it's a unique violation (already liked), just ignore
-      if (error.code !== '23505') {
-        console.error('Error liking activity:', error)
-        throw error
-      }
-      return { alreadyLiked: true }
+    try {
+      await supabase
+        .from('activity_likes')
+        .insert([
+          { activity_id: activityId, user_id: userId }
+        ]);
+      
+      await supabase.rpc('increment_like_count', { act_id: activityId });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error liking activity:', error);
+      throw error;
     }
-    
-    // Update like count on the activity
-    await this.incrementLikeCount(activityId)
-    
-    return { success: true }
   },
   
   async incrementLikeCount(activityId) {
@@ -290,14 +285,14 @@ export const supabaseActivities = {
 }
 
 // Friends-related methods
-export const supabseFriends = {
+export const supabaseFriends = {
   async getFriends(userId) {
     const { data, error } = await supabase
       .from('friends')
       .select(`
         friend_id,
         friend:friend_id (
-          id, first_name, last_name, email, role
+          id, first_name, last_name, email, role, profile_picture_url
         )
       `)
       .eq('user_id', userId)
@@ -314,7 +309,8 @@ export const supabseFriends = {
         id: friend.friend_id,
         name: `${friend.friend.first_name} ${friend.friend.last_name}`,
         email: friend.friend.email,
-        role: friend.friend.role
+        role: friend.friend.role,
+        profilePicture: friend.friend.profile_picture_url
       }))
     }
   },
@@ -382,7 +378,7 @@ export const supabseFriends = {
     }
     
     if (!friendsData || friendsData.length === 0) {
-      return { items: [] }
+      return { success: true, items: [] }
     }
     
     const friendIds = friendsData.map(f => f.friend_id)
@@ -393,12 +389,12 @@ export const supabseFriends = {
       .select(`
         *,
         user:user_id (
-          id, first_name, last_name, email, role
+          id, first_name, last_name, email, role, profile_picture_url
         ),
         comments:activity_comments (
           id, user_id, comment, created_at,
           user:user_id (
-            id, first_name, last_name
+            id, first_name, last_name, profile_picture_url
           )
         )
       `)
@@ -420,7 +416,8 @@ export const supabseFriends = {
           id: activity.user.id,
           name: `${activity.user.first_name} ${activity.user.last_name}`,
           email: activity.user.email,
-          role: activity.user.role
+          role: activity.user.role,
+          profilePicture: activity.user.profile_picture_url
         } : null,
         comments: activity.comments ? activity.comments.map(comment => ({
           id: comment.id,
@@ -428,10 +425,48 @@ export const supabseFriends = {
           created_at: comment.created_at,
           user: comment.user ? {
             id: comment.user.id,
-            name: `${comment.user.first_name} ${comment.user.last_name}`
+            name: `${comment.user.first_name} ${comment.user.last_name}`,
+            profilePicture: comment.user.profile_picture_url
           } : null
         })) : []
       }))
     }
   }
 }
+
+// Statistics methods
+export const supabaseStats = {
+  async getUserStatistics(userId) {
+    const { data, error } = await supabase
+      .rpc('get_user_statistics_with_periods', { user_id_param: userId })
+    
+    if (error) {
+      console.error('Error fetching user statistics:', error)
+      throw error
+    }
+    
+    return data
+  },
+  
+  async getGlobalStatistics() {
+    const { data, error } = await supabase
+      .rpc('get_global_statistics_with_periods')
+    
+    if (error) {
+      console.error('Error fetching global statistics:', error)
+      throw error
+    }
+    
+    return data
+  }
+}
+
+// Create a type-safe enhanced client with getGlobalStatistics
+/** @type {import('@supabase/supabase-js').SupabaseClient & {getGlobalStatistics: () => Promise<any>}} */
+const enhancedSupabase = {
+  ...supabase,
+  getGlobalStatistics: supabaseStats.getGlobalStatistics
+}
+
+// Replace the default export with our enhanced version
+export default enhancedSupabase

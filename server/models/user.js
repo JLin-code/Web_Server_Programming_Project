@@ -8,26 +8,31 @@ const userModel = {
   async getAll() {
     const { data, error } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, role, created_at')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
+      .select('id, email, first_name, last_name, role, created_at');
+      
+    if (error) throw new Error(`Database error: ${error.message}`);
     return data;
   },
 
   /**
    * Get a user by ID
-   * @param {string|number} id - User ID
+   * @param {string} id - User ID
    * @returns {Promise<Object>} User data
    */
   async getById(id) {
     const { data, error } = await supabase
       .from('users')
-      .select('id, first_name, last_name, email, role, created_at')
+      .select('id, email, first_name, last_name, role, created_at')
       .eq('id', id)
       .single();
+      
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No match found
+      }
+      throw new Error(`Database error: ${error.message}`);
+    }
     
-    if (error) throw error;
     return data;
   },
 
@@ -42,8 +47,14 @@ const userModel = {
       .select('*')
       .eq('email', email)
       .single();
+      
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return null; // No match found
+      }
+      throw new Error(`Database error: ${error.message}`);
+    }
     
-    if (error) throw error;
     return data;
   },
 
@@ -55,33 +66,46 @@ const userModel = {
   async create(userData) {
     const { data, error } = await supabase
       .from('users')
-      .insert([userData])
-      .select();
-    
-    if (error) throw error;
-    return data[0];
+      .insert([{
+        email: userData.email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        password_hash: userData.password_hash,
+        role: userData.role || 'user'
+      }])
+      .select()
+      .single();
+      
+    if (error) throw new Error(`Failed to create user: ${error.message}`);
+    return data;
   },
 
   /**
    * Update user data
-   * @param {string|number} id - User ID
+   * @param {string} id - User ID
    * @param {Object} userData - User data to update
    * @returns {Promise<Object>} Updated user
    */
   async update(id, userData) {
+    // Filter out any undefined values
+    const updateData = Object.fromEntries(
+      Object.entries(userData).filter(([_, v]) => v !== undefined)
+    );
+    
     const { data, error } = await supabase
       .from('users')
-      .update(userData)
+      .update(updateData)
       .eq('id', id)
-      .select();
-    
-    if (error) throw error;
-    return data[0];
+      .select()
+      .single();
+      
+    if (error) throw new Error(`Failed to update user: ${error.message}`);
+    return data;
   },
 
   /**
    * Delete a user
-   * @param {string|number} id - User ID
+   * @param {string} id - User ID
    * @returns {Promise<boolean>} Success status
    */
   async delete(id) {
@@ -89,50 +113,34 @@ const userModel = {
       .from('users')
       .delete()
       .eq('id', id);
-    
-    if (error) throw error;
+      
+    if (error) throw new Error(`Failed to delete user: ${error.message}`);
     return true;
   },
-
+  
   /**
-   * Get user activities
-   * @param {string|number} userId - User ID
-   * @returns {Promise<Array>} User activities
+   * Get user statistics
+   * @param {string} id - User ID
+   * @returns {Promise<Object>} User statistics
    */
-  async getUserActivities(userId) {
+  async getStatistics(id) {
     const { data, error } = await supabase
-      .from('activities')
-      .select(`
-        *,
-        user:user_id (
-          id, first_name, last_name, email, role
-        ),
-        comments:activity_comments (
-          id, user_id, comment, created_at,
-          user:user_id (
-            id, first_name, last_name
-          )
-        )
-      `)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
+      .rpc('get_user_statistics_with_periods', { user_id_param: id });
+      
+    if (error) throw new Error(`Failed to get user statistics: ${error.message}`);
     return data;
   },
-
+  
   /**
-   * Change user role
-   * @param {string|number} userId - User ID
-   * @param {string} role - New role ('user' or 'admin')
-   * @returns {Promise<Object>} Updated user
+   * Get global platform statistics
+   * @returns {Promise<Object>} Global statistics
    */
-  async changeRole(userId, role) {
-    if (role !== 'user' && role !== 'admin') {
-      throw new Error('Invalid role specified');
-    }
-    
-    return this.update(userId, { role });
+  async getGlobalStatistics() {
+    const { data, error } = await supabase
+      .rpc('get_global_statistics_with_periods');
+      
+    if (error) throw new Error(`Failed to get global statistics: ${error.message}`);
+    return data;
   }
 };
 

@@ -1,16 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { activitiesService } from '../services/activitiesApi';
+import { ref, onMounted } from 'vue';
+import { supabase, supabaseActivities } from '../services/supabase';
 import { authService } from '../services/api';
-import AddActivityForm from '../components/AddActivityForm.vue';
-import type { Activity } from '../types';
+import type { Activity, User } from '../types';
 
 const page = 'My Activity';
-const showAddForm = ref(false);
-const activities = ref<Activity[]>([]); // Add proper type annotation
+const currentUser = ref<User | null>(null);
+const activities = ref<Activity[]>([]);
 const loading = ref(true);
 const error = ref('');
-const currentUser = ref({ id: null, name: '' });
 
 // Format date helper
 const formatDate = (dateString: string) => {
@@ -23,155 +21,187 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// Computed property to filter activities based on current user's name
-const filteredActivities = computed(() => {
-  return activities.value.filter(activity => activity.user.name === currentUser.value.name);
-});
-
-// Delete activity function
-const deleteActivity = async (id: string | number) => {
+// Get current user
+const getCurrentUser = async () => {
   try {
-    await activitiesService.delete(id);
-    activities.value = activities.value.filter(a => String(a.id) !== String(id));
-  } catch (err) {
-    console.error('Failed to delete activity:', err);
-    error.value = 'Failed to delete activity';
-    setTimeout(() => { error.value = ''; }, 3000); // Clear error after 3 seconds
-  }
-};
-
-// Add a like function to handle activity likes
-const likeActivity = async (id: string | number) => {
-  try {
-    const activity = activities.value.find(a => String(a.id) === String(id));
-    if (!activity) return;
-    
-    // Try to use the dedicated like method if available
-    try {
-      if (activitiesService.like) {
-        await activitiesService.like(id);
-      } else {
-        await activitiesService.update(id, { likes: (activity.likes || 0) + 1 });
-      }
-    } catch (likeErr) {
-      console.warn('Like method failed, falling back to update', likeErr);
-      await activitiesService.update(id, { likes: (activity.likes || 0) + 1 });
-    }
-    
-    // Update the UI
-    activity.likes = (activity.likes || 0) + 1;
-  } catch (err) {
-    console.error('Failed to like activity:', err);
-    error.value = 'Failed to like activity';
-    setTimeout(() => { error.value = ''; }, 3000);
-  }
-};
-
-onMounted(async () => {
-  try {
-    loading.value = true;
-    
-    // Get current user
     const response = await authService.getCurrentUser();
     if (response && response.user) {
-      currentUser.value = {
-        id: response.user.id,
-        name: `${response.user.first_name} ${response.user.last_name}`
-      };
-    }
-    
-    // Get activities
-    const activityResponse = await activitiesService.getAll();
-    activities.value = activityResponse.items || [];
-    
-    // If using fallback data, filter by the current user's email
-    if (activityResponse.source === 'fallback') {
-      console.log('Using fallback activities data, filtering by current user');
-      // For fallback scenarios, compare by name since we might not have consistent IDs
-      activities.value = activities.value.filter(activity => 
-        activity.user.name === currentUser.value.name ||
-        activity.user.email === currentUser.value.email
-      );
+      currentUser.value = response.user;
+      // Once we have the user, get their activities
+      await fetchUserActivities();
     }
   } catch (err) {
-    error.value = 'Failed to load your activities';
-    console.error(err);
+    console.error('Failed to get current user:', err);
+    error.value = 'Failed to authenticate user';
+    loading.value = false;
+  }
+};
+
+// Fetch user activities
+const fetchUserActivities = async () => {
+  if (!currentUser.value?.id) {
+    error.value = 'User not authenticated';
+    loading.value = false;
+    return;
+  }
+
+  try {
+    // Get activities from Supabase
+    const result = await supabaseActivities.getUserActivities(currentUser.value.id);
+    
+    if (result && result.success && result.items) {
+      activities.value = result.items;
+    } else {
+      error.value = 'No activities found';
+    }
+  } catch (err) {
+    console.error('Failed to load activities:', err);
+    error.value = 'Failed to load activities';
   } finally {
     loading.value = false;
   }
+};
+
+// Like Activity
+const likeActivity = async (activityId: string) => {
+  if (!currentUser.value?.id) return;
+  
+  try {
+    await supabaseActivities.likeActivity(activityId, currentUser.value.id);
+    
+    // Update the activity in the list
+    const activity = activities.value.find(a => a.id === activityId);
+    if (activity) {
+      activity.likes = (activity.likes || 0) + 1;
+    }
+  } catch (err) {
+    console.error('Failed to like activity:', err);
+  }
+};
+
+// Add comment
+const addComment = async (activityId: string, comment: string) => {
+  if (!currentUser.value?.id || !comment.trim()) return;
+  
+  try {
+    await supabaseActivities.addComment(activityId, currentUser.value.id, comment);
+    
+    // Update the activity in the list
+    const activity = activities.value.find(a => a.id === activityId);
+    if (activity) {
+      activity.comments = (activity.comments || 0) + 1;
+    }
+    
+    // Refresh activities to show the new comment
+    fetchUserActivities();
+  } catch (err) {
+    console.error('Failed to add comment:', err);
+  }
+};
+
+// Delete activity
+const deleteActivity = async (id: string) => {
+  try {
+    const { data, error: deleteError } = await supabase
+      .from('activities')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', currentUser.value?.id); // Ensure user can only delete their own activities
+    
+    if (!deleteError) {
+      activities.value = activities.value.filter(a => a.id !== id);
+    } else {
+      console.error('Failed to delete activity:', deleteError);
+    }
+  } catch (err) {
+    console.error('Failed to delete activity:', err);
+  }
+};
+
+// Extract metrics from activity for display
+const getActivityMetrics = (activity: Activity) => {
+  let metrics: Record<string, string> = {};
+  
+  // Add type-specific metrics depending on the activity type
+  switch (activity.type?.toLowerCase()) {
+    case 'running':
+      metrics = { distance: '5 km', pace: '5:30 min/km', duration: '27:30' };
+      break;
+    case 'cycling':
+      metrics = { distance: '25 km', speed: '20 km/h', duration: '1:15:00' };
+      break;
+    case 'swimming':
+      metrics = { distance: '1000 m', laps: '20', duration: '25:00' };
+      break;
+    case 'strength':
+      metrics = { sets: '4', reps: '12', weight: 'varied' };
+      break;
+    case 'yoga':
+    case 'pilates':
+    case 'dance':
+      metrics = { duration: '45:00', intensity: 'moderate', focus: 'full body' };
+      break;
+    default:
+      metrics = { duration: '45:00' };
+  }
+  
+  return metrics;
+};
+
+onMounted(() => {
+  getCurrentUser();
 });
-
-const toggleAddForm = () => {
-  showAddForm.value = !showAddForm.value;
-};
-
-const handleActivityAdded = () => {
-  showAddForm.value = false;
-  // Reload activities
-  loading.value = true;
-  activitiesService.getAll().then(response => {
-    activities.value = response.items || [];
-    loading.value = false;
-  }).catch(err => {
-    console.error('Failed to refresh activities:', err);
-    loading.value = false;
-  });
-};
 </script>
 
 <template>
   <main>
-    <div class="header-actions">
-      <h1 class="title">{{ page }}</h1>
-      <button class="btn-primary" @click="toggleAddForm" v-if="!showAddForm">
-        Add New Activity
-      </button>
-    </div>
+    <h1 class="title">{{ page }}</h1>
     
-    <div v-if="showAddForm">
-      <AddActivityForm 
-        @activity-added="handleActivityAdded" 
-        @cancel="toggleAddForm" 
-      />
-    </div>
-    
-    <div v-else class="activities-container">
+    <div class="activities-container">
       <div v-if="loading" class="loading">
-        <p>Loading your activities...</p>
+        <p>Loading activities...</p>
       </div>
       
       <div v-else-if="error" class="error">
         <p>{{ error }}</p>
       </div>
       
-      <div v-else-if="filteredActivities.length === 0" class="empty-state">
-        <p>No activities found for {{ currentUser.name }}.</p>
-        <button class="btn" @click="toggleAddForm">Record New Activity</button>
+      <div v-else-if="activities.length === 0" class="empty-state">
+        <p>You haven't recorded any activities yet.</p>
+        <button class="btn">Record New Activity</button>
       </div>
       
       <div v-else class="activities-list">
-        <div v-for="activity in filteredActivities" :key="activity.id" class="activity-card card">
+        <div v-for="activity in activities" :key="activity.id" class="activity-card card">
           <div class="delete-button" @click="deleteActivity(activity.id)">✕</div>
+          
           <div class="user-info">
-            <img :src="activity.user.avatar" :alt="activity.user.name" class="user-avatar">
+            <img 
+              v-if="activity.user?.profilePicture" 
+              :src="activity.user.profilePicture" 
+              :alt="activity.user?.name || 'User'" 
+              class="user-avatar"
+            >
+            <div v-else class="user-avatar-placeholder">
+              <i class="fas fa-user"></i>
+            </div>
+            
             <div>
-              <h3 class="user-name">
-                {{ activity.user.name }}
-              </h3>
-              <span class="activity-date">{{ formatDate(activity.created_at || activity.date) }}</span>
+              <h4 class="user-name">{{ activity.user?.name || 'You' }}</h4>
+              <p class="activity-date">{{ formatDate(activity.created_at) }}</p>
             </div>
           </div>
           
           <div class="activity-content">
-            <h4 class="activity-title">{{ activity.title }}</h4>
+            <h3 class="activity-title">{{ activity.title }}</h3>
             <p class="activity-description">{{ activity.description }}</p>
             
-            <div v-if="activity.image" class="activity-image-container">
-              <img :src="activity.image" :alt="activity.title" class="activity-image">
+            <div v-if="activity.image_url" class="activity-image-container">
+              <img :src="activity.image_url" :alt="activity.title" class="activity-image">
             </div>
             
             <div class="activity-metrics">
-              <div v-for="(value, key) in activity.metrics" :key="key" class="metric">
+              <div v-for="(value, key) in getActivityMetrics(activity)" :key="key" class="metric">
                 <span class="metric-value">{{ value }}</span>
                 <span class="metric-label">{{ key }}</span>
               </div>
@@ -243,6 +273,19 @@ const handleActivityAdded = () => {
   border-radius: 50%;
   margin-right: 1rem;
   object-fit: cover;
+}
+
+.user-avatar-placeholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-right: 1rem;
+  background-color: #4a4a4a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-size: 1.5rem;
 }
 
 .user-name {

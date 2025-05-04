@@ -20,7 +20,8 @@ const currentUser = ref({
     id: '',
     name: '',
     email: '',
-    isAdmin: false
+    isAdmin: false,
+    profilePicture: ''
 });
 const hasError = ref(false);
 const errorMessage = ref('');
@@ -41,13 +42,38 @@ onMounted(async () => {
   }
 });
 
-// Load demo users for login dropdown
+// Enhanced loadDemoUsers without network diagnostics
 async function loadDemoUsers() {
   try {
     demoUsersLoading.value = true;
     console.log('Loading demo users...');
     
-    // First try to get users from the API
+    // Import fallback users directly from the module
+    const { demoUsers: fallbackUsers } = await import('@/data/hardcodedUsers');
+    
+    // Always set the fallback users first to ensure something is available
+    demoUsers.value = fallbackUsers.map(user => ({
+      username: user.username,
+      displayName: user.displayName
+    }));
+    
+    // Try to get users directly from API first
+    try {
+      const response = await authService.getDemoUsers();
+      
+      if (response?.success && Array.isArray(response.users) && response.users.length > 0) {
+        console.log('Demo users loaded directly from API:', response.users.length);
+        demoUsers.value = response.users.map((user: { username: string, displayName: string }) => ({
+          username: user.username,
+          displayName: user.displayName
+        }));
+        return true;
+      }
+    } catch (apiError) {
+      console.warn('Direct API call failed:', apiError);
+    }
+    
+    // Fall back to store if direct API call fails
     const success = await usersStore.fetchDemoUsers();
     
     if (success && usersStore.demoUsers.length > 0) {
@@ -56,22 +82,13 @@ async function loadDemoUsers() {
         username: user.username,
         displayName: user.displayName
       }));
-      console.log('Demo users loaded from API:', demoUsers.value.length);
+      console.log('Demo users loaded from store:', demoUsers.value.length);
     } else {
-      // Fallback to hardcoded users if API fails or returns empty
-      console.log('Falling back to hardcoded users');
-      demoUsers.value = fallbackUsers.map(user => ({
-        username: user.username,
-        displayName: user.displayName
-      }));
+      console.log('Using fallback users:', demoUsers.value.length);
     }
   } catch (err) {
-    console.warn('Error loading demo users:', err);
-    // Ensure we still have fallback users if everything fails
-    demoUsers.value = fallbackUsers.map(user => ({
-      username: user.username,
-      displayName: user.displayName
-    }));
+    console.error('Error loading demo users:', err);
+    // Handle fallback logic if needed
   } finally {
     demoUsersLoading.value = false;
   }
@@ -97,7 +114,7 @@ async function checkUserSession() {
     if (session) {
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('id, first_name, last_name, email, role')
+        .select('id, first_name, last_name, email, role, profile_picture_url')
         .eq('email', session.user.email)
         .single();
         
@@ -106,6 +123,7 @@ async function checkUserSession() {
           id: userData.id,
           name: `${userData.first_name} ${userData.last_name}`,
           email: userData.email,
+          profilePicture: userData.profile_picture_url
         });
         return;
       }
@@ -116,32 +134,6 @@ async function checkUserSession() {
   } catch (err) {
     console.warn('Session check error:', err);
   }
-}
-
-// Simplified API user check
-async function checkApiUser() {
-  try {
-    const response = await authService.getCurrentUser().catch(() => null);
-    
-    if (response?.user) {
-      setUserData({
-        id: response.user.id,
-        name: `${response.user.first_name} ${response.user.last_name}`,
-        email: response.user.email,
-      });
-    }
-  } catch (err) {
-    console.warn('API user check failed:', err);
-  }
-}
-
-// Helper to set user data consistently
-function setUserData(userData: {id: string, name: string, email: string}) {
-  isLoggedIn.value = true;
-  currentUser.value.id = userData.id;
-  currentUser.value.name = userData.name;
-  currentUser.value.email = userData.email;
-  currentUser.value.isAdmin = true; // Always set admin true for simplicity
 }
 
 // Toggles dropdown while ensuring only one is open at a time
@@ -181,7 +173,7 @@ async function login(username: string, password: string) {
     if (!authError && authData.user) {
       const { data: userData } = await supabase
         .from('users')
-        .select('id, first_name, last_name, email, role')
+        .select('id, first_name, last_name, email, role, profile_picture_url')
         .eq('email', authData.user.email)
         .single();
       
@@ -189,7 +181,8 @@ async function login(username: string, password: string) {
         setUserData({
           id: userData.id,
           name: `${userData.first_name} ${userData.last_name}`,
-          email: userData.email
+          email: userData.email,
+          profilePicture: userData.profile_picture_url
         });
         handleSuccessfulLogin();
         return { success: true };
@@ -202,7 +195,8 @@ async function login(username: string, password: string) {
       setUserData({
         id: apiResponse.user.id,
         name: `${apiResponse.user.first_name} ${apiResponse.user.last_name}`,
-        email: apiResponse.user.email
+        email: apiResponse.user.email,
+        profilePicture: apiResponse.user.profile_picture_url
       });
       handleSuccessfulLogin();
       return { success: true };
@@ -231,15 +225,21 @@ function fallbackLogin(username: string) {
     const firstName = nameParts[0] || '';
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ').split('(')[0].trim() : '';
     
+    // Set user data even in fallback mode
     setUserData({
-      id: 'fallback-id-' + (Math.floor(Math.random() * 1000)),
-      name: `${firstName} ${lastName}`,
-      email: username
+      id: username, // Use username as ID in fallback mode
+      name: hardcodedUser.displayName,
+      email: username,
+      profilePicture: ''
     });
+    
+    // Set admin status based on hardcoded data
+    currentUser.value.isAdmin = hardcodedUser.isAdmin;
+    
     handleSuccessfulLogin();
     return { success: true };
   }
-  return { success: false };
+  return { success: false, message: 'Invalid login credentials' };
 }
 
 // Simplified logout
@@ -251,10 +251,40 @@ async function logout() {
     console.error('Logout error:', error);
   } finally {
     isLoggedIn.value = false;
-    currentUser.value = { id: '', name: '', email: '', isAdmin: false };
+    currentUser.value = { id: '', name: '', email: '', isAdmin: false, profilePicture: '' };
     router.push('/');
   }
 }
+// Simplified API user check
+async function checkApiUser() {
+  try {
+    const response = await authService.getCurrentUser().catch(() => null);
+    
+    if (response?.user) {
+      setUserData({
+        id: response.user.id,
+        name: `${response.user.first_name} ${response.user.last_name}`,
+        email: response.user.email,
+        profilePicture: response.user.profile_picture_url
+      });
+    }
+  } catch (err) {
+    console.warn('API user check failed:', err);
+  }
+}
+
+// Helper to set user data consistently
+function setUserData(userData: {id: string, name: string, email: string, profilePicture?: string}) {
+  isLoggedIn.value = true;
+  currentUser.value.id = userData.id;
+  currentUser.value.name = userData.name;
+  currentUser.value.email = userData.email;
+  currentUser.value.profilePicture = userData.profilePicture || '';
+}
+</script>
+
+<script lang="ts">
+// Empty script block, functions moved to script setup
 </script>
 
 <template>
@@ -376,10 +406,13 @@ async function logout() {
                                 </RouterLink>
                                 
                                 <RouterLink v-if="isLoggedIn" to="/profile" class="button is-primary">
-                                    <span>Profile ({{ currentUser.name }})</span>
-                                    <span class="icon">
+                                    <span v-if="currentUser.profilePicture" class="user-avatar-small">
+                                        <img :src="currentUser.profilePicture" alt="Profile" />
+                                    </span>
+                                    <span v-else class="icon">
                                         <i class="fas fa-user"></i>
                                     </span>
+                                    <span>{{ currentUser.name }}</span>
                                 </RouterLink>
                                 
                                 <a v-if="isLoggedIn" @click="logout" class="button is-light">
@@ -412,12 +445,17 @@ async function logout() {
                                                 </button>
                                             </div>
                                         </div>
-                                        <a v-for="user in demoUsers" 
-                                           :key="user.username" 
-                                           class="navbar-item" 
-                                           @click.stop="login(user.username, 'password')">
-                                          {{ user.displayName }}
-                                        </a>
+                                        <template v-else>
+                                            <p class="navbar-item has-text-grey-light has-text-centered is-size-7">
+                                                Click a user to log in
+                                            </p>
+                                            <a v-for="user in demoUsers" 
+                                               :key="user.username" 
+                                               class="navbar-item" 
+                                               @click.stop="login(user.username, 'password')">
+                                              {{ user.displayName }}
+                                            </a>
+                                        </template>
                                     </div>
                                 </div>
                             </div>
@@ -654,5 +692,22 @@ async function logout() {
 
 .mt-2 {
     margin-top: 0.5rem;
+}
+
+.user-avatar-small {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    margin-right: 8px;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.user-avatar-small img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 </style>

@@ -2,16 +2,29 @@
 import { ref, onMounted } from 'vue'
 import { authService } from '../services/api'
 import axios from 'axios'
+import supabaseClient from '../services/supabase'  // Changed to default import
+import type { User } from '../types'
 
-// Define the User interface locally since we're no longer importing it
-interface User {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  role: string;
-  created_at?: string;
+// Define the statistics return type
+interface GlobalStatistics {
+  total_users?: number;
+  total_activities?: number;
+  periods?: {
+    all_time?: {
+      likes?: number;
+    };
+  };
+  total_comments?: number;
+  activity_type_distribution?: Record<string, number>;
 }
+
+// Define a type for our enhanced Supabase client
+type EnhancedSupabaseClient = typeof supabaseClient & {
+  getGlobalStatistics: () => Promise<GlobalStatistics>
+}
+
+// Cast the client to our enhanced type
+const supabase = supabaseClient as EnhancedSupabaseClient
 
 // Create a properly typed axios client
 const apiClient = axios.create({
@@ -26,11 +39,18 @@ const apiClient = axios.create({
 const isDebug = ref(false);
 
 const currentUser = ref<User | null>(null)
-const statistics = ref({
-  activeUsers: 42,  // Default values to ensure something always shows
-  totalActivities: 156,
-  totalConnections: 89,
-  totalComments: 217
+const statistics = ref<{
+  activeUsers: number;
+  totalActivities: number;
+  totalConnections: number;
+  totalComments: number;
+  activityTypes: Record<string, number>;
+}>({
+  activeUsers: 0,
+  totalActivities: 0,
+  totalConnections: 0,
+  totalComments: 0,
+  activityTypes: {}
 })
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -41,7 +61,7 @@ const getCurrentUser = async () => {
     console.log('Getting current user...')
     const response = await authService.getCurrentUser();
     if (response && response.user) {
-      currentUser.value = { ...response.user, id: String(response.user.id) };
+      currentUser.value = response.user;
       console.log('Current user loaded:', currentUser.value)
     }
   } catch (err) {
@@ -57,21 +77,58 @@ const fetchStatistics = async () => {
     loading.value = true
     error.value = null
     
-    const response = await apiClient.get('/api/v1/data/statistics/global').catch(() => {
-      console.warn('API call failed, using fallback data');
-      return { data: null };
-    });
+    // Try Supabase first (using the function we created)
+    const globalStats = await supabase.getGlobalStatistics().catch(() => null);
     
-    if (response.data && response.data.success && response.data.statistics) {
+    if (globalStats) {
       statistics.value = {
-        activeUsers: response.data.statistics.active_users || 42,
-        totalActivities: response.data.statistics.total_activities || 156,
-        totalConnections: response.data.statistics.total_connections || 89,
-        totalComments: response.data.statistics.total_comments || 217
+        activeUsers: globalStats.total_users || 0,
+        totalActivities: globalStats.total_activities || 0,
+        totalConnections: (globalStats.periods?.all_time?.likes || 0),
+        totalComments: globalStats.total_comments || 0,
+        activityTypes: globalStats.activity_type_distribution || {}
+      };
+      console.log('Statistics loaded from Supabase:', statistics.value);
+    } 
+    // Fallback to API
+    else {
+      const response = await apiClient.get('/api/v1/data/statistics/global').catch(() => {
+        console.warn('API call failed, using fallback data');
+        return { data: null };
+      });
+      
+      if (response?.data?.success && response.data.statistics) {
+        statistics.value = {
+          activeUsers: response.data.statistics.active_users || 7,
+          totalActivities: response.data.statistics.total_activities || 12,
+          totalConnections: response.data.statistics.total_connections || 9,
+          totalComments: response.data.statistics.total_comments || 12,
+          activityTypes: response.data.statistics.activity_type_distribution || {}
+        };
+        console.log('Statistics loaded from API');
+      } else {
+        // Use fallback data if API fails
+        console.log('Using fallback statistics data');
+        statistics.value = {
+          activeUsers: 7,
+          totalActivities: 12,
+          totalConnections: 9,
+          totalComments: 12,
+          activityTypes: {
+            running: 1,
+            strength: 1,
+            yoga: 1,
+            cycling: 2,
+            cardio: 1,
+            swimming: 1,
+            basketball: 1,
+            pilates: 1,
+            tennis: 1,
+            hiking: 1,
+            dance: 1
+          }
+        };
       }
-    } else {
-      // Use fallback data
-      console.log('Using fallback statistics data')
     }
   } catch (err) {
     console.error('Failed to load statistics:', err)
@@ -136,6 +193,18 @@ onMounted(() => {
           <div class="stat-value">{{ statistics.totalComments || 0 }}</div>
         </div>
       </div>
+      
+      <!-- Activity Type Distribution -->
+      <div v-if="!loading && !error && Object.keys(statistics.activityTypes).length > 0" class="activity-types-section">
+        <h3 class="subsection-title">Activity Types</h3>
+        <div class="activity-types-grid">
+          <div v-for="(count, type) in statistics.activityTypes" :key="type" class="activity-type-card">
+            <div class="activity-type-icon">{{ getActivityIcon(type) }}</div>
+            <div class="activity-type-name">{{ formatActivityType(type) }}</div>
+            <div class="activity-type-count">{{ count }}</div>
+          </div>
+        </div>
+      </div>
     </section>
     
     <!-- Features Section -->
@@ -163,6 +232,30 @@ onMounted(() => {
     </section>
   </div>
 </template>
+
+<script lang="ts">
+// Helper functions for display
+function getActivityIcon(type: string) {
+  const icons: Record<string, string> = {
+    running: '🏃',
+    cycling: '🚴',
+    swimming: '🏊',
+    yoga: '🧘',
+    strength: '💪',
+    cardio: '❤️',
+    basketball: '🏀',
+    tennis: '🎾',
+    pilates: '🤸',
+    hiking: '🥾',
+    dance: '💃'
+  };
+  return icons[type.toLowerCase()] || '🏋️';
+}
+
+function formatActivityType(type: string) {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+</script>
 
 <style scoped>
 .debug-panel {
@@ -273,5 +366,50 @@ onMounted(() => {
   padding: 2rem;
   background-color: var(--dark-secondary);
   border-radius: 8px;
+}
+
+.activity-types-section {
+  margin-top: 2rem;
+}
+
+.subsection-title {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+
+.activity-types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 1rem;
+}
+
+.activity-type-card {
+  background-color: var(--dark-secondary);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.activity-type-card:hover {
+  transform: translateY(-4px);
+}
+
+.activity-type-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.activity-type-name {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.activity-type-count {
+  color: var(--highlight);
+  font-weight: bold;
 }
 </style>

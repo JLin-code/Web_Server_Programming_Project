@@ -3,30 +3,94 @@ require('dotenv').config();
 
 // Get Supabase credentials from environment variables
 const supabaseUrl = process.env.SUPABASE_URL;
-// Explicitly use the service_key for server operations that require SQL execution
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+
+// Log environment variable availability (without exposing actual keys)
+console.log('Supabase Configuration:');
+console.log(`- SUPABASE_URL: ${supabaseUrl ? 'Defined ✓' : 'MISSING ✗'}`);
+console.log(`- SUPABASE_SECRET_KEY: ${supabaseSecretKey ? 'Defined ✓' : 'MISSING ✗'}`);
 
 // Validate environment variables
-if (!supabaseUrl || !supabaseKey) {
-  console.error('ERROR: Missing required Supabase environment variables:');
-  console.error(`SUPABASE_URL: ${supabaseUrl ? 'Set' : 'Missing'}`);
-  console.error(`SUPABASE_KEY/SERVICE_KEY: ${supabaseKey ? 'Set' : 'Missing'}`);
-  console.error('Please check your .env file and ensure these variables are properly configured.');
+if (!supabaseUrl) {
+  console.error('ERROR: Missing SUPABASE_URL environment variable');
+  console.error('Please check your .env file and ensure this variable is properly configured.');
   process.exit(1);
 }
 
-// Check if we're using the service_role key
-const isServiceRole = supabaseKey.includes('service_role');
-console.log(`Using key type: ${isServiceRole ? 'service_role' : 'anon/other'}`);
-if (!isServiceRole) {
-  console.warn('WARNING: Not using service_role key. SQL execution will fail.');
+if (!supabaseSecretKey) {
+  console.error('ERROR: Missing SUPABASE_SECRET_KEY environment variable');
+  console.error('Please check your .env file and ensure this variable is properly configured.');
+  process.exit(1);
+}
+
+// Check if token has elevated permissions by properly decoding the JWT
+function hasElevatedPermissions(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, '=');
+    const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+    
+    return payload.role === 'service_role';
+  } catch (e) {
+    console.error('Error checking token permissions:', e);
+    return false;
+  }
+}
+
+// Allow bypassing permission check in development mode via env var
+const bypassPermissionCheck = process.env.BYPASS_PERMISSION_CHECK === 'true' && 
+                             process.env.NODE_ENV === 'development';
+
+// Check if we're using a key with proper permissions
+const hasPermission = bypassPermissionCheck || hasElevatedPermissions(supabaseSecretKey);
+console.log(`Key permissions: ${hasPermission ? 'elevated access ✓' : 'limited access ✗'}`);
+
+if (bypassPermissionCheck) {
+  console.log('⚠️ Permission check bypassed via BYPASS_PERMISSION_CHECK environment variable');
+}
+
+// For debugging in dev mode only
+if (process.env.NODE_ENV === 'development' && !hasPermission) {
+  console.log('DEBUG: JWT payload check failed - Token structure:');
+  try {
+    const parts = supabaseSecretKey.split('.');
+    if (parts.length === 3) {
+      const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, '=');
+      const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+      console.log('Decoded payload:', payload);
+      console.log(`- Token role: ${payload.role || 'not found'}`);
+    }
+  } catch (e) {
+    console.log('- Could not parse token for debugging:', e.message);
+  }
+}
+
+// Enforce proper permissions for server operations
+if (!hasPermission) {
+  console.error('ERROR: Secret key with elevated permissions is required for server operations');
+  console.error('Current key does not have sufficient permissions. SQL execution will fail.');
+  console.error('Please check your .env file to ensure SUPABASE_SECRET_KEY contains the correct key.');
+  console.error('Tip: The key should have "service_role" in the JWT payload.');
+  console.error('You can get your secret key from the Supabase dashboard → Project Settings → API.');
+  
+  if (process.env.NODE_ENV === 'production') {
+    console.error('Exiting due to insufficient permissions in production');
+    process.exit(1);
+  } else {
+    console.warn('WARNING: Continuing in development mode with limited permissions, some features will not work');
+  }
 }
 
 // Initialize the Supabase client
 console.log(`Initializing Supabase client with URL: ${supabaseUrl}`);
+
 const supabase = createClient(
   supabaseUrl,
-  supabaseKey,
+  supabaseSecretKey,
   {
     auth: {
       autoRefreshToken: false,
@@ -35,128 +99,106 @@ const supabase = createClient(
   }
 );
 
-// Function to execute SQL directly (which the client doesn't support directly)
-async function executeSql(sql) {
+// Add a test function that verifies connection
+async function testConnection() {
+  console.log('Testing Supabase connection from server...');
   try {
-    // We need to use RPC (Remote Procedure Call) for executing arbitrary SQL
-    // First, check if our helper function exists
-    const { data: existsFnData, error: existsFnError } = await supabase.rpc(
-      'function_exists', 
-      { function_name: 'exec_sql' }
-    ).maybeSingle();
-
-    // If the function doesn't exist or we got an error, we need to create it
-    if (existsFnError || !(existsFnData && existsFnData.exists)) {
-      // Create the function via REST API call
-      console.log('Creating exec_sql function...');
-      const createFnRes = await fetch(`${supabaseUrl}/rest/v1/rpc/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`
-        },
-        body: JSON.stringify({
-          name: 'exec_sql',
-          definition: `
-            CREATE OR REPLACE FUNCTION exec_sql(query text)
-            RETURNS jsonb
-            LANGUAGE plpgsql
-            SECURITY DEFINER
-            AS $$
-            BEGIN
-              EXECUTE query;
-              RETURN jsonb_build_object('success', true);
-            EXCEPTION WHEN OTHERS THEN
-              RETURN jsonb_build_object(
-                'success', false, 
-                'error', SQLERRM, 
-                'detail', SQLSTATE
-              );
-            END;
-            $$;
-          `
-        })
-      });
-      
-      if (!createFnRes.ok) {
-        const error = await createFnRes.json();
-        throw new Error(`Failed to create exec_sql function: ${JSON.stringify(error)}`);
-      }
-    }
-
-    // Now we can execute our SQL using the function
-    const { data, error } = await supabase.rpc('exec_sql', { query: sql });
+    const startTime = process.hrtime();
+    const { data, error } = await supabase.from('users').select('count').limit(1);
+    const hrTime = process.hrtime(startTime);
+    const duration = hrTime[0] * 1000 + hrTime[1] / 1000000;
     
     if (error) {
-      throw new Error(`SQL execution error: ${error.message}`);
+      console.error(`❌ Supabase connection failed (${duration.toFixed(2)}ms):`);
+      console.error(`   Error: ${error.message}`);
+      console.error(`   Code: ${error.code}`);
+      return false;
     }
     
-    if (data && !data.success) {
-      throw new Error(`SQL execution failed: ${data.error}`);
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('Failed to execute SQL:', error);
-    throw error;
+    console.log(`✅ Supabase connection successful (${duration.toFixed(2)}ms)`);
+    console.log(`   Response: ${JSON.stringify(data)}`);
+    return true;
+  } catch (err) {
+    console.error('❌ Critical Supabase connection error:', err);
+    console.error('This could indicate network issues or invalid credentials.');
+    return false;
   }
 }
 
-// Function to check if the exec_sql function already exists
-async function createHelperFunction() {
+// Function to execute SQL directly (which the client doesn't support directly)
+async function executeSql(sql) {
+  // Check again for permissions before allowing SQL execution
+  if (!hasPermission) {
+    throw new Error('SQL execution requires elevated permissions');
+  }
+
+  // Attempt to create a SQL execution function if it doesn't exist
   try {
-    console.log('Setting up SQL execution helper function...');
+    // First try to use the function directly
+    const { data, error } = await supabase.rpc('exec_sql', { query: sql });
     
-    // SQL to create a function to check if another function exists
-    const checkFnSql = `
-      CREATE OR REPLACE FUNCTION function_exists(function_name text)
-      RETURNS TABLE(exists boolean)
+    if (!error) {
+      return data;
+    }
+    
+    // If this fails, we might need to create the function first
+    console.log('SQL function not found or error occurred, attempting to create it...');
+    
+    // Create the SQL execution function in Supabase
+    const createFnSql = `
+      CREATE OR REPLACE FUNCTION exec_sql(query text)
+      RETURNS JSONB
       LANGUAGE plpgsql
       SECURITY DEFINER
       AS $$
+      DECLARE
+        result JSONB;
       BEGIN
-        RETURN QUERY SELECT EXISTS (
-          SELECT 1
-          FROM pg_proc
-          WHERE proname = function_name
+        EXECUTE query INTO result;
+        RETURN result;
+      EXCEPTION WHEN OTHERS THEN
+        RETURN jsonb_build_object(
+          'error', SQLERRM,
+          'detail', SQLSTATE
         );
       END;
-      $$;
-    `;
+      $$;`;
     
-    // Execute directly against the database using the REST API
+    // Use REST API directly to create the function (needs secret key)
     const response = await fetch(`${supabaseUrl}/rest/v1/rpc/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
-        'Prefer': 'return=representation'
+        'apikey': supabaseSecretKey,
+        'Authorization': `Bearer ${supabaseSecretKey}`,
+        'Prefer': 'tx=commit'
       },
-      body: JSON.stringify({
-        name: 'create_function_exists',
-        sql: checkFnSql
-      })
+      body: JSON.stringify({ query: createFnSql })
     });
-    
+
     if (!response.ok) {
-      const error = await response.json();
-      console.warn('Helper function may already exist or could not be created:', error);
-      // We'll try to use it anyway
-    } else {
-      console.log('Helper function created successfully');
+      const errorText = await response.text();
+      console.warn(`Could not create exec_sql function: ${errorText}`);
+      throw new Error(`Failed to create SQL execution function: ${errorText}`);
     }
-  } catch (error) {
-    console.warn('Failed to create helper function, will attempt direct SQL execution:', error);
+    
+    // Now try to use the newly created function
+    const { data: execData, error: execError } = await supabase.rpc('exec_sql', { query: sql });
+    
+    if (execError) {
+      throw new Error(`SQL execution error: ${execError.message}`);
+    }
+    
+    return execData;
+  } catch (err) {
+    console.error('SQL execution failed:', err.message);
+    throw err;
   }
 }
 
-// Initialize helper functions
-createHelperFunction();
-
-// Export the client and SQL execution function
+// Export the client and functions
 module.exports = { 
   supabase,
-  executeSql
+  executeSql,
+  testConnection
 };

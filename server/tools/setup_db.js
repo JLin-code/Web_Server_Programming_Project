@@ -6,25 +6,53 @@ const fetch = require('node-fetch'); // You may need to install this: npm instal
 
 // Get credentials from environment variables
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseSecretKey) {
   console.error('Error: Missing Supabase credentials in environment variables');
-  console.error('Make sure SUPABASE_URL and SUPABASE_SERVICE_KEY are set in your .env file');
+  console.error('Make sure SUPABASE_URL and SUPABASE_SECRET_KEY are set in your .env file');
   process.exit(1);
 }
 
-// Verify we're using the service role key
-if (!supabaseKey.includes('service_role')) {
-  console.error('Error: You must use the service_role key for SQL execution');
-  console.error('Current key does not appear to be a service_role key');
-  console.error('Please check your .env file and ensure SUPABASE_SERVICE_KEY is set correctly');
-  process.exit(1);
+// Function to check if token has elevated permissions by decoding the JWT
+function checkKeyPermissions(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, '=');
+      const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
+      
+      if (payload.role === 'service_role') {
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error('Error checking token permissions:', e);
+  }
+  return false;
 }
 
-// Initialize Supabase client with service role key
+// Add this test function before actual usage
+function validateJWTPermissions(token) {
+  const hasPermission = checkKeyPermissions(token);
+  if (!hasPermission) {
+    console.error('\nERROR: The provided SUPABASE_SECRET_KEY does not have service_role permissions.');
+    console.error('This is required for setting up the database schema.');
+    console.error('Please check your .env file and ensure you are using the Service Role key from your Supabase project settings.\n');
+    process.exit(1);
+  }
+  
+  console.log('✓ Service role key validation passed');
+  return true;
+}
+
+// Run the validation check
+validateJWTPermissions(supabaseSecretKey);
+
+// Initialize Supabase client with secret key
 console.log('Initializing Supabase client...');
-const supabase = createClient(supabaseUrl, supabaseKey, {
+const supabase = createClient(supabaseUrl, supabaseSecretKey, {
   auth: { persistSession: false }
 });
 
@@ -45,8 +73,8 @@ async function executeSQL(sql) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`,
+        'apikey': supabaseSecretKey,
+        'Authorization': `Bearer ${supabaseSecretKey}`,
         'Prefer': 'tx=commit'
       },
       body: JSON.stringify({ query: sql })
@@ -66,31 +94,38 @@ async function executeSQL(sql) {
 
 // Create the SQL execution function in the database
 async function setupSqlExecutionFunction() {
-  console.log('Setting up SQL execution function in the database...');
-  
-  const createFunctionSQL = `
-    CREATE OR REPLACE FUNCTION exec_sql(query text)
-    RETURNS jsonb
-    LANGUAGE plpgsql
-    SECURITY DEFINER
-    AS $$
-    BEGIN
-      EXECUTE query;
-      RETURN jsonb_build_object('success', true);
-    EXCEPTION WHEN OTHERS THEN
-      RETURN jsonb_build_object('success', false, 'error', SQLERRM, 'detail', SQLSTATE);
-    END;
-    $$;
-  `;
-  
   try {
-    // Create the function using direct SQL query through the REST API
+    console.log('Setting up SQL execution function...');
+    
+    // Define the SQL function that allows us to execute arbitrary SQL
+    const createFunctionSQL = `
+      CREATE OR REPLACE FUNCTION exec_sql(query text)
+      RETURNS JSONB
+      LANGUAGE plpgsql
+      SECURITY DEFINER
+      AS $$
+      DECLARE
+        result JSONB;
+      BEGIN
+        EXECUTE query INTO result;
+        RETURN result;
+      EXCEPTION WHEN OTHERS THEN
+        RETURN jsonb_build_object(
+          'success', false,
+          'error', SQLERRM,
+          'detail', SQLSTATE
+        );
+      END;
+      $$;
+    `;
+    
+    // Try to create the function
     const response = await fetch(`${supabaseUrl}/rest/v1/rpc/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${supabaseKey}`
+        'apikey': supabaseSecretKey,
+        'Authorization': `Bearer ${supabaseSecretKey}`
       },
       body: JSON.stringify({
         sql: createFunctionSQL
@@ -105,8 +140,8 @@ async function setupSqlExecutionFunction() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
+          'apikey': supabaseSecretKey,
+          'Authorization': `Bearer ${supabaseSecretKey}`,
           'Prefer': 'tx=commit'
         },
         body: JSON.stringify({
@@ -122,8 +157,8 @@ async function setupSqlExecutionFunction() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/sql',
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`
+            'apikey': supabaseSecretKey,
+            'Authorization': `Bearer ${supabaseSecretKey}`
           },
           body: createFunctionSQL
         });
@@ -163,74 +198,82 @@ async function executeSQLViaRPC(sql) {
 
 // Function to find and execute SQL files
 async function setupDatabase() {
-  console.log('Starting database setup...');
-
   try {
-    // First, set up the SQL execution function
+    console.log('Starting database setup...');
+    
+    // First, try to create the SQL execution function
     await setupSqlExecutionFunction();
     
-    // Find SQL directory
+    // Find the SQL directory
     let sqlDir = null;
-    let sqlFiles = [];
-    
     for (const dir of sqlDirectories) {
       try {
         await fs.access(dir);
-        const files = await fs.readdir(dir);
-        const sqlFilesInDir = files.filter(file => file.endsWith('.sql'));
-        if (sqlFilesInDir.length > 0) {
-          sqlDir = dir;
-          sqlFiles = sqlFilesInDir;
-          break;
-        }
+        sqlDir = dir;
+        console.log(`Found SQL directory: ${dir}`);
+        break;
       } catch (err) {
-        // Directory doesn't exist or can't be accessed - try the next one
+        // Directory doesn't exist, try next one
       }
     }
-
-    if (!sqlDir) {
-      console.error('Error: Could not find any SQL files directory');
-      console.error('Please create an "sql" directory in your project with your SQL files');
-      process.exit(1);
-    }
-
-    console.log(`Found SQL files in ${sqlDir}`);
     
-    // Sort SQL files by name to ensure proper execution order
-    sqlFiles.sort();
-    console.log(`SQL files to execute (${sqlFiles.length}):`, sqlFiles);
-
+    if (!sqlDir) {
+      throw new Error('Could not find any SQL directory');
+    }
+    
+    // Get all SQL files and sort them alphabetically to ensure correct order
+    const files = await fs.readdir(sqlDir);
+    const sqlFiles = files
+      .filter(file => file.endsWith('.sql'))
+      .sort();
+    
+    if (sqlFiles.length === 0) {
+      console.log('No SQL files found to execute.');
+      return;
+    }
+    
+    console.log(`Found ${sqlFiles.length} SQL files to execute.`);
+    
     // Execute each SQL file
     for (const file of sqlFiles) {
+      console.log(`\nExecuting SQL file: ${file}`);
       try {
-        console.log(`Executing ${file}...`);
-        const filePath = path.join(sqlDir, file);
-        const sql = await fs.readFile(filePath, 'utf8');
+        const sql = await fs.readFile(path.join(sqlDir, file), 'utf8');
         
+        // Try to execute via RPC first
         try {
-          // Try to execute using the RPC function first
           await executeSQLViaRPC(sql);
+          console.log(`✅ Successfully executed ${file}`);
         } catch (rpcError) {
-          console.log(`RPC execution failed, trying direct execution for ${file}...`);
+          // Fallback to direct execution
+          console.log(`RPC execution failed, falling back to direct API: ${rpcError.message}`);
           await executeSQL(sql);
+          console.log(`✅ Successfully executed ${file} via direct API`);
         }
         
-        console.log(`✅ Successfully executed ${file}`);
       } catch (error) {
-        console.error(`❌ Failed to execute ${file}: ${error.message}`);
-        process.exit(1);
+        console.error(`❌ Failed to execute ${file}:`, error);
+        throw error;
       }
     }
-
-    console.log('✅ Database setup completed successfully');
-  } catch (err) {
-    console.error('Error setting up database:', err);
+    
+    console.log('\n✅ Database setup completed successfully!');
+    
+  } catch (error) {
+    console.error('\n❌ Database setup failed:', error);
     process.exit(1);
   }
 }
 
-// Run the setup
-setupDatabase().catch(err => {
-  console.error('Error setting up database:', err);
-  process.exit(1);
-});
+// Run the setup if this script is called directly
+if (require.main === module) {
+  setupDatabase();
+} else {
+  // Export functions for use in other scripts
+  module.exports = {
+    setupDatabase,
+    executeSQL,
+    executeSQLViaRPC,
+    setupSqlExecutionFunction
+  };
+}

@@ -10,6 +10,7 @@ interface User {
   email: string;
   handle: string;
   isAdmin: boolean;
+  profilePicture?: string;
 }
 
 const users = ref<User[]>([]);
@@ -19,20 +20,21 @@ const error = ref('');
 onMounted(async () => {
   try {
     loading.value = true;
-    const response = await userService.getAll();
+    const response = await userService.getUsers();
     
     if (!response || !response.items) {
       error.value = 'Invalid server response';
       return;
     }
     
-    users.value = response.items.map((user: { id: number; first_name: string; last_name: string; email: string; handle?: string; role: string }) => ({
+    users.value = response.items.map((user: { id: number; first_name: string; last_name: string; email: string; handle?: string; role: string; profile_picture_url?: string }) => ({
       id: user.id,
       firstName: user.first_name,
       lastName: user.last_name,
       email: user.email,
       handle: user.handle || `@${user.first_name.toLowerCase()}`,
-      isAdmin: user.role === 'admin'
+      isAdmin: user.role === 'admin',
+      profilePicture: user.profile_picture_url
     }));
   } catch (err) {
     error.value = 'Failed to load users from server';
@@ -52,7 +54,7 @@ async function deleteUser(user: User) {
   console.log('Delete user:', user);
   if (confirm(`Are you sure you want to delete ${user.firstName} ${user.lastName}?`)) {
     try {
-      await userService.delete(user.id);
+      await userService.delete(user.id.toString());
       users.value = users.value.filter(u => u.id !== user.id);
       console.log('User deleted');
     } catch (err) {
@@ -70,6 +72,7 @@ async function deleteUser(user: User) {
       <table class="table is-fullwidth is-striped is-hoverable">
         <thead>
           <tr>
+            <th>Profile</th>
             <th>First Name</th>
             <th>Last Name</th>
             <th>Email</th>
@@ -80,6 +83,12 @@ async function deleteUser(user: User) {
         </thead>
         <tbody>
           <tr v-for="(user, index) in users" :key="index">
+            <td>
+              <div class="user-avatar-small">
+                <img v-if="user.profilePicture" :src="user.profilePicture" :alt="user.firstName">
+                <i v-else class="fas fa-user"></i>
+              </div>
+            </td>
             <td>{{ user.firstName }}</td>
             <td>{{ user.lastName }}</td>
             <td>{{ user.email }}</td>
@@ -189,6 +198,25 @@ async function deleteUser(user: User) {
   background-color: #48c774;
   color: #fff;
   border: 1px solid #3ab364;
+}
+
+.user-avatar-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e0e0e0;
+  color: #555;
+  font-size: 1.2rem;
+}
+
+.user-avatar-small img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 @media screen and (max-width: 768px) {

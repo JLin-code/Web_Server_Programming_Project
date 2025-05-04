@@ -2,49 +2,69 @@
 import { ref, onMounted } from 'vue';
 import { userService } from '../services/api';
 import { friendsService as friendService } from '../services/friendsApi';
+import { supabaseUsers } from '../services/supabase';
 
 const page = 'People Search';
 
 // Users state
-const users = ref<{ 
-  id: number; 
+interface User {
+  id: string; 
   firstName: string; 
   lastName: string; 
   email: string; 
-  handle: string; 
+  handle: string;
+  profilePicture?: string;
   isFriend: boolean; 
-}[]>([]);
+}
+
+const users = ref<User[]>([]);
 const loading = ref(true);
 const error = ref('');
 const searchQuery = ref('');
-const currentUserId = ref<number | null>(null);
+const currentUserId = ref<string | null>(null);
 
 onMounted(async () => {
   try {
     loading.value = true;
     
     // Get current user
-    const userResponse = await userService.getUserById('current'); // Replace 'current' with the appropriate identifier for the current user
+    const userResponse = await userService.getUserById('current');
     if (userResponse && userResponse.user) {
       currentUserId.value = userResponse.user.id;
     }
     
-    // Get all users
-    const response = await userService.getUsers();
+    // Get all users - first try Supabase direct
+    let userList;
+    try {
+      const { data } = await supabaseUsers.getAll();
+      userList = data?.map(user => ({
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        profile_picture_url: user.profile_picture_url,
+        handle: user.handle || `@${user.first_name.toLowerCase()}`
+      }));
+    } catch {
+      // Fall back to API
+      const response = await userService.getUsers();
+      userList = response.items;
+    }
     
     // Get friends
-    let friendIds = new Set();
+    let friendIds = new Set<string>();
     if (currentUserId.value !== null) {
       const friendsResponse = await friendService.getFriends(currentUserId.value.toString());
-      friendIds = new Set(friendsResponse.items.map((friend: { id: number }) => friend.id));
+      friendIds = new Set(friendsResponse.items.map((friend: { id: string }) => friend.id));
     }
     
     // Mark friends in the user list
-    users.value = response.items.map((user: { id: number; first_name: string; last_name: string; email: string; handle?: string }) => ({
+    users.value = userList.map((user: any) => ({
       id: user.id,
       firstName: user.first_name,
       lastName: user.last_name,
       email: user.email,
+      profilePicture: user.profile_picture_url,
       handle: user.handle || `@${user.first_name.toLowerCase()}`,
       isFriend: friendIds.has(user.id)
     }));
@@ -64,18 +84,22 @@ function filteredUsers() {
   
   const query = searchQuery.value.toLowerCase();
   return users.value.filter(user => 
-    user.firstName.toLowerCase().includes(query) || 
-    user.lastName.toLowerCase().includes(query) || 
-    user.email.toLowerCase().includes(query) || 
+    user.firstName.toLowerCase().includes(query) ||
+    user.lastName.toLowerCase().includes(query) ||
+    user.email.toLowerCase().includes(query) ||
     user.handle.toLowerCase().includes(query)
   );
 }
 
-async function addFriend(user: { id: number; firstName: string; lastName: string; email: string; handle: string; isFriend: boolean }) {
+// Add friend function
+async function addFriend(user: User) {
+  if (!currentUserId.value) {
+    console.error("Current user not authenticated");
+    return;
+  }
+  
   try {
-    if (!currentUserId.value) return;
-    
-    await friendService.sendFriendRequest(currentUserId.value.toString(), user.id.toString());
+    await friendService.addFriend(currentUserId.value.toString(), user.id.toString());
     user.isFriend = true;
     console.log(`Added ${user.firstName} as friend`);
   } catch (err) {
@@ -83,17 +107,19 @@ async function addFriend(user: { id: number; firstName: string; lastName: string
   }
 }
 
-async function removeFriend(user: { id: number; firstName: string; lastName: string; email: string; handle: string; isFriend: boolean }) {
-  if (!currentUserId.value) return;
+// Remove friend function
+async function removeFriend(user: User) {
+  if (!currentUserId.value) {
+    console.error("Current user not authenticated");
+    return;
+  }
   
-  if (confirm(`Are you sure you want to remove ${user.firstName} ${user.lastName} from your friends?`)) {
-    try {
-      await friendService.removeFriend(currentUserId.value.toString(), user.id.toString());
-      user.isFriend = false;
-      console.log(`Removed ${user.firstName} from friends`);
-    } catch (err) {
-      console.error(`Failed to remove ${user.firstName} from friends:`, err);
-    }
+  try {
+    await friendService.removeFriend(currentUserId.value.toString(), user.id.toString());
+    user.isFriend = false;
+    console.log(`Removed ${user.firstName} from friends`);
+  } catch (err) {
+    console.error(`Failed to remove ${user.firstName} from friends:`, err);
   }
 }
 </script>
@@ -121,6 +147,7 @@ async function removeFriend(user: { id: number; firstName: string; lastName: str
       <table class="table is-fullwidth is-striped is-hoverable">
         <thead>
           <tr>
+            <th>Profile</th>
             <th>First Name</th>
             <th>Last Name</th>
             <th>Email</th>
@@ -131,6 +158,12 @@ async function removeFriend(user: { id: number; firstName: string; lastName: str
         </thead>
         <tbody>
           <tr v-for="(user, index) in filteredUsers()" :key="index">
+            <td>
+              <div class="user-avatar-small">
+                <img v-if="user.profilePicture" :src="user.profilePicture" :alt="user.firstName">
+                <i v-else class="fas fa-user"></i>
+              </div>
+            </td>
             <td>{{ user.firstName }}</td>
             <td>{{ user.lastName }}</td>
             <td>{{ user.email }}</td>
@@ -253,6 +286,25 @@ async function removeFriend(user: { id: number; firstName: string; lastName: str
   background-color: #f14668;
   color: #fff;
   border: 1px solid #e02c50;
+}
+
+.user-avatar-small {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e0e0e0;
+  color: #555;
+  font-size: 1.2rem;
+}
+
+.user-avatar-small img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 @media screen and (max-width: 768px) {

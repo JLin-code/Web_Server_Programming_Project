@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
-const { supabase } = require('../config/supabase');
+const { supabase, executeSql } = require('../utils/supabaseClient');
 
 // Function to read and execute SQL files
 async function executeSqlFile(filePath) {
@@ -8,15 +8,15 @@ async function executeSqlFile(filePath) {
     console.log(`Executing SQL file: ${filePath}`);
     const sql = await fs.readFile(filePath, 'utf8');
     
-    // Execute the SQL query using the REST API approach
-    const { data, error } = await supabase.rpc('exec_sql', { query: sql });
+    // Execute the SQL query using the utility function
+    const result = await executeSql(sql);
     
-    if (error) {
-      throw new Error(`Error executing ${path.basename(filePath)}: ${error.message}`);
+    if (result && result.error) {
+      throw new Error(`Error executing ${path.basename(filePath)}: ${result.error}`);
     }
     
     console.log(`✓ Successfully executed ${path.basename(filePath)}`);
-    return data;
+    return result;
   } catch (error) {
     console.error(`❌ Failed to execute ${path.basename(filePath)}`);
     console.error(error);
@@ -27,22 +27,54 @@ async function executeSqlFile(filePath) {
 // Function to run all migrations in order
 async function runMigrations() {
   try {
-    const migrationsDir = path.join(__dirname, 'migrations');
-    const files = await fs.readdir(migrationsDir);
+    console.log('Starting database migrations...');
     
-    // Sort files to ensure correct execution order
+    // Define paths to check for SQL files
+    const sqlDirectories = [
+      path.join(__dirname, '..', 'sql'),
+      path.join(__dirname, 'migrations'),
+      path.join(__dirname, '..', '..', 'sql')
+    ];
+    
+    // Find the first directory that exists
+    let sqlDir = null;
+    for (const dir of sqlDirectories) {
+      try {
+        await fs.access(dir);
+        sqlDir = dir;
+        console.log(`Found SQL directory: ${dir}`);
+        break;
+      } catch (err) {
+        // Directory doesn't exist, try the next one
+      }
+    }
+    
+    if (!sqlDir) {
+      throw new Error('Could not find any SQL directory');
+    }
+    
+    // Get all SQL files and sort them alphabetically to ensure correct execution order
+    const files = await fs.readdir(sqlDir);
     const sqlFiles = files
       .filter(file => file.endsWith('.sql'))
       .sort();
     
-    for (const file of sqlFiles) {
-      await executeSqlFile(path.join(migrationsDir, file));
+    if (sqlFiles.length === 0) {
+      console.log('No SQL files found to execute.');
+      return;
     }
     
-    console.log('✅ All migrations executed successfully');
+    console.log(`Found ${sqlFiles.length} SQL files to execute:`);
+    sqlFiles.forEach(file => console.log(`- ${file}`));
+    
+    // Execute each file in order
+    for (const file of sqlFiles) {
+      await executeSqlFile(path.join(sqlDir, file));
+    }
+    
+    console.log('✅ All migrations completed successfully');
   } catch (error) {
-    console.error('❌ Migration process failed');
-    console.error(error);
+    console.error('❌ Migration process failed:', error);
     process.exit(1);
   }
 }

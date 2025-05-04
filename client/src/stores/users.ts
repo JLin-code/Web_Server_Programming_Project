@@ -85,16 +85,68 @@ export const useUsersStore = defineStore('users', () => {
     error.value = null;
     
     try {
-      const result = await authService.getDemoUsers();
+      console.log('Attempting to fetch demo users from API...');
+      // Add debug logging for network issues
+      const startTime = Date.now();
       
-      if (result.success && Array.isArray(result.users) && result.users.length > 0) {
+      try {
+        // First, check if the API is reachable with a quick ping
+        const pingResponse = await fetch('/api/ping', { 
+          method: 'HEAD',
+          cache: 'no-store'
+        });
+        console.log(`API ping response: ${pingResponse.status}`);
+      } catch (pingErr) {
+        console.warn('API ping failed:', pingErr);
+      }
+      
+      // Add a timeout to ensure we wait for the API response
+      const result = await Promise.race([
+        authService.getDemoUsers(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('API request timeout')), 8000)
+        )
+      ]).catch(err => {
+        console.warn('API error in getDemoUsers:', err);
+        return { success: false, message: `API error: ${err.message || 'Unknown error'}`, users: [] };
+      });
+      
+      const requestTime = Date.now() - startTime;
+      console.log(`API response for demo users (took ${requestTime}ms):`, result);
+      
+      if (result?.success && Array.isArray(result.users) && result.users.length > 0) {
         demoUsers.value = result.users;
-        console.log('Demo users fetched successfully:', demoUsers.value);
+        console.log('Demo users fetched successfully from API:', demoUsers.value);
         return true;
       }
       
-      console.warn('No demo users returned from API:', result);
-      error.value = result.message || 'No demo users available from server';
+      // Log more details about the API response
+      if (!result?.success) {
+        console.warn('API returned unsuccessful response:', result?.message);
+      } else if (!Array.isArray(result.users)) {
+        console.warn('API response users is not an array:', result.users);
+      } else if (result.users.length === 0) {
+        console.warn('API returned empty users array');
+      }
+      
+      // If API returns no users, use fallback from hardcodedUsers
+      console.warn('Falling back to hardcoded users');
+      try {
+        // Import directly from TS file with explicit extension
+        const { demoUsers: hardcodedDemoUsers } = await import('../data/hardcodedUsers');
+        if (Array.isArray(hardcodedDemoUsers) && hardcodedDemoUsers.length > 0) {
+          demoUsers.value = hardcodedDemoUsers.map(user => ({
+            username: user.username,
+            displayName: user.displayName
+          }));
+          console.log('Using hardcoded fallback users:', demoUsers.value.length);
+          return false; // Return false to indicate we're using fallbacks
+        }
+      } catch (fallbackErr) {
+        console.error('Error importing fallback users:', fallbackErr);
+      }
+      
+      error.value = result?.message || 'No demo users available from server';
       return false;
     } catch (err) {
       console.error('Error fetching demo users:', err);

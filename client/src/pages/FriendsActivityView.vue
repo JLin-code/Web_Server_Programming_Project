@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { activitiesService } from '../services/activitiesApi';
-import type { Activity } from '../types';
+import { supabase, supabaseFriends } from '../services/supabase';
+import { authService } from '../services/api';
+import type { Activity, User } from '../types';
 
 const page = 'Friends Activity';
-const activities = ref<Activity[]>([]); // Add proper type annotation
+const currentUser = ref<User | null>(null);
+const activities = ref<Activity[]>([]);
 const loading = ref(true);
 const error = ref('');
 
@@ -19,30 +21,129 @@ const formatDate = (dateString: string) => {
   });
 };
 
-// Delete activity function
-const deleteActivity = async (id: number) => {
+// Get current user
+const getCurrentUser = async () => {
   try {
-    await activitiesService.delete(id);
-    activities.value = activities.value.filter(a => Number(a.id) !== id);
+    const response = await authService.getCurrentUser();
+    if (response && response.user) {
+      currentUser.value = response.user;
+      // Once we have the user, get friends' activities
+      await fetchFriendsActivities();
+    }
   } catch (err) {
-    console.error('Failed to delete activity:', err);
-    error.value = 'Failed to delete activity';
+    console.error('Failed to get current user:', err);
+    error.value = 'Failed to authenticate user';
+    loading.value = false;
   }
 };
 
-onMounted(async () => {
+// Fetch friends' activities
+const fetchFriendsActivities = async () => {
+  if (!currentUser.value?.id) {
+    error.value = 'User not authenticated';
+    loading.value = false;
+    return;
+  }
+
   try {
-    loading.value = true;
-    const response = await activitiesService.getAll();
-    activities.value = response.items || [];
+    // Get activities from Supabase
+    const result = await supabaseFriends.getFriendActivities(currentUser.value.id);
+    
+    if (result && result.success && result.items) {
+      activities.value = result.items;
+    } else {
+      error.value = 'No friend activities found';
+    }
   } catch (err) {
-    error.value = 'Failed to load activities';
-    console.error(err);
+    console.error('Failed to load friend activities:', err);
+    error.value = 'Failed to load friend activities';
   } finally {
     loading.value = false;
   }
-});
+};
 
+// Like Activity
+const likeActivity = async (activityId: string) => {
+  if (!currentUser.value?.id) return;
+  
+  try {
+    await supabase
+      .from('activity_likes')
+      .insert([
+        { activity_id: activityId, user_id: currentUser.value.id }
+      ]);
+    
+    await supabase.rpc('increment_like_count', { act_id: activityId });
+    
+    // Update the activity in the list
+    const activity = activities.value.find(a => a.id === activityId);
+    if (activity) {
+      activity.likes = (activity.likes || 0) + 1;
+    }
+  } catch (err) {
+    console.error('Failed to like activity:', err);
+  }
+};
+
+// Add comment
+const addComment = async (activityId: string, comment: string) => {
+  if (!currentUser.value?.id || !comment.trim()) return;
+  
+  try {
+    await supabase
+      .from('activity_comments')
+      .insert([
+        { activity_id: activityId, user_id: currentUser.value.id, comment }
+      ]);
+    
+    await supabase.rpc('increment_comment_count', { act_id: activityId });
+    
+    // Update the activity in the list
+    const activity = activities.value.find(a => a.id === activityId);
+    if (activity) {
+      activity.comments = (activity.comments || 0) + 1;
+    }
+    
+    // Refresh activities to show the new comment
+    fetchFriendsActivities();
+  } catch (err) {
+    console.error('Failed to add comment:', err);
+  }
+};
+
+// Extract metrics from activity for display
+const getActivityMetrics = (activity: Activity) => {
+  let metrics: Record<string, string> = {};
+  
+  // Add type-specific metrics depending on the activity type
+  switch (activity.type?.toLowerCase()) {
+    case 'running':
+      metrics = { distance: '5 km', pace: '5:30 min/km', duration: '27:30' };
+      break;
+    case 'cycling':
+      metrics = { distance: '25 km', speed: '20 km/h', duration: '1:15:00' };
+      break;
+    case 'swimming':
+      metrics = { distance: '1000 m', laps: '20', duration: '25:00' };
+      break;
+    case 'strength':
+      metrics = { sets: '4', reps: '12', weight: 'varied' };
+      break;
+    case 'yoga':
+    case 'pilates':
+    case 'dance':
+      metrics = { duration: '45:00', intensity: 'moderate', focus: 'full body' };
+      break;
+    default:
+      metrics = { duration: '45:00' };
+  }
+  
+  return metrics;
+};
+
+onMounted(() => {
+  getCurrentUser();
+});
 </script>
 
 <template>
@@ -59,38 +160,39 @@ onMounted(async () => {
       </div>
       
       <div v-else-if="activities.length === 0" class="empty-state">
-        <p>No activities have been recorded yet.</p>
-        <button class="btn">Record New Activity</button>
+        <p>No friend activities have been recorded yet.</p>
+        <p>Add friends to see their activities here!</p>
       </div>
       
       <div v-else class="activities-list">
         <div v-for="activity in activities" :key="activity.id" class="activity-card card">
-          <div class="delete-button" @click="deleteActivity(Number(activity.id))">✕</div>
           <div class="user-info">
-            <!-- Use a fallback avatar URL if user.avatar doesn't exist -->
             <img 
-              :src="activity.user?.avatar || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(activity.user?.name || 'User')" 
-              :alt="activity.user?.name || 'User'" 
+              v-if="activity.user?.profilePicture" 
+              :src="activity.user.profilePicture" 
+              :alt="activity.user?.name" 
               class="user-avatar"
             >
+            <div v-else class="user-avatar-placeholder">
+              <i class="fas fa-user"></i>
+            </div>
+            
             <div>
-              <h3 class="user-name">
-                {{ activity.user?.name || 'Anonymous User' }}
-              </h3>
-              <span class="activity-date">{{ formatDate(activity.created_at) }}</span>
+              <h4 class="user-name">{{ activity.user?.name }}</h4>
+              <p class="activity-date">{{ formatDate(activity.created_at) }}</p>
             </div>
           </div>
           
           <div class="activity-content">
-            <h4 class="activity-title">{{ activity.title }}</h4>
+            <h3 class="activity-title">{{ activity.title }}</h3>
             <p class="activity-description">{{ activity.description }}</p>
             
-            <div v-if="activity.image" class="activity-image-container">
-              <img :src="activity.image" :alt="activity.title" class="activity-image">
+            <div v-if="activity.image_url" class="activity-image-container">
+              <img :src="activity.image_url" :alt="activity.title" class="activity-image">
             </div>
             
             <div class="activity-metrics">
-              <div v-for="(value, key) in activity.metrics" :key="key" class="metric">
+              <div v-for="(value, key) in getActivityMetrics(activity)" :key="key" class="metric">
                 <span class="metric-value">{{ value }}</span>
                 <span class="metric-label">{{ key }}</span>
               </div>
@@ -104,13 +206,12 @@ onMounted(async () => {
             </div>
             
             <div class="engagement-actions">
-              <button class="engagement-btn" @click="activity.likes++">
+              <button class="engagement-btn" @click="likeActivity(activity.id)">
                 👍 Like
               </button>
               <button class="engagement-btn">
                 💬 Comment
               </button>
-              <button class="btn-small">Edit</button>
             </div>
           </div>
         </div>
@@ -162,6 +263,19 @@ onMounted(async () => {
   border-radius: 50%;
   margin-right: 1rem;
   object-fit: cover;
+}
+
+.user-avatar-placeholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  margin-right: 1rem;
+  background-color: #4a4a4a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-size: 1.5rem;
 }
 
 .user-name {

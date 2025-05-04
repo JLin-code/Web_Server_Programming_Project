@@ -8,6 +8,12 @@ app.use(express.json());
 // Register the data routes
 app.use('/api/v1/data', dataRoutes);
 
+// Import the diagnostics controller
+const diagnosticsRouter = require('./controllers/diagnostics');
+
+// Use the diagnostics routes
+app.use('/api/diagnostics', diagnosticsRouter);
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   res.status(err.status || 500).json({

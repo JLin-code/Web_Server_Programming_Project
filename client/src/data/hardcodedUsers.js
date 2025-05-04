@@ -1,18 +1,25 @@
 /**
- * User data is no longer stored in the client for security purposes.
- * All user data is managed exclusively on the server side.
- * 
+ * User data is now imported from hardcodedUsers.ts for consistency.
  * This file exists only for backwards compatibility with existing imports.
- * Consider refactoring any code that imports from this file.
  */
 
-// Empty array - NO client-side user data for security
-export const demoUsers = [];
+// Import from the TypeScript version to ensure consistency
+import { demoUsers as tsDemoUsers } from './hardcodedUsers.ts';
 
-// Export a deprecation notice function
+// Use the TypeScript version instead of an empty array
+export const demoUsers = tsDemoUsers;
+
+// Export a function that actually returns the demo users
 export const getDemoUsers = () => {
   console.warn('WARNING: getDemoUsers() is deprecated. Use AuthService.getDemoUsers() instead.');
-  return { success: false, message: 'Demo users are only available through the server API', users: [] };
+  return { 
+    success: true, 
+    message: 'Using fallback demo users', 
+    users: tsDemoUsers.map(user => ({
+      username: user.username,
+      displayName: user.displayName
+    }))
+  };
 };
 
 export default demoUsers;

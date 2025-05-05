@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue';
 import { supabase, supabaseFriends, supabaseActivities } from '../services/supabase';
 import { authService } from '../services/api';
 import mockDataService from '../services/mockDataService'; // Fix import to match MyActivityView
-import ConnectionErrorMessage from '../components/ConnectionErrorMessage.vue';
 import type { Activity, User } from '../types';
 
 const page = 'Friends Activity';
@@ -262,10 +261,9 @@ onMounted(() => {
   <main>
     <h1 class="title">{{ page }}</h1>
     
-    <ConnectionErrorMessage 
-      v-if="showingSampleData" 
-      :onRetry="getCurrentUser"
-    />
+    <div v-if="showingSampleData" class="notification is-warning">
+      <p><strong>Note:</strong> Showing sample data because we couldn't connect to the server.</p>
+    </div>
     
     <div class="activities-container">
       <div v-if="loading" class="loading">

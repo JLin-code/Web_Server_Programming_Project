@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { supabase } from '../utils/supabaseClient';
 import { supabaseActivities } from '../services/supabase';
 import { authService } from '../services/api';
 import { mockDataService } from '../services/mockDataService';
-import { checkServerHealth, diagnoseServerConnection } from '../utils/serverHealth';
-import ConnectionErrorMessage from '../components/ConnectionErrorMessage.vue';
+import { checkServerHealth } from '../utils/serverHealth';
 import type { Activity, User } from '../types';
 
 const page = 'My Activity';
@@ -26,20 +25,6 @@ const debugInfo = ref({
   activities: [],
   userIds: []
 });
-const diagnosticsRunning = ref(false);
-const connectionDiagnostics = ref<any>(null);
-const endpointChecks = ref<any[]>([]);
-
-// Add more detailed API diagnostics information
-const apiDiagnostics = ref({
-  lastTestedEndpoint: '',
-  lastStatus: 0,
-  failedEndpoints: [] as string[],
-  successfulEndpoints: [] as string[],
-  lastError: '',
-  retryAttempts: 0,
-  lastRetryTimestamp: null as Date | null
-});
 
 const toggleDebug = () => {
   isDebugMode.value = !isDebugMode.value;
@@ -49,283 +34,117 @@ const toggleDebug = () => {
   }
 };
 
-// Enhanced diagnostic info for connection error message
-const connectionStatus = computed(() => {
-  if (!currentUser.value?.id && showingSampleData.value) {
-    // Check if we have diagnostics that indicate partial connectivity
-    if (connectionDiagnostics.value?.serverReachable) {
-      return 'limited'; // Server is reachable but API endpoints are failing
-    }
-    return 'offline';
-  }
-  if (debugInfo.value.lastError) {
-    return 'error';
-  }
-  if (debugInfo.value.databaseAccessible) {
-    return 'online';
-  }
-  return 'limited';
-});
-
-// Generate appropriate connectivity message based on diagnostics
-const getConnectivityMessage = () => {
-  if (!connectionDiagnostics.value) return null;
-  
-  // If server is reachable but we're still showing sample data
-  if (connectionDiagnostics.value.serverReachable && showingSampleData.value) {
-    if (apiDiagnostics.value.failedEndpoints.length > 0) {
-      return `The server is reachable, but API endpoints are failing (${apiDiagnostics.value.failedEndpoints.length} failed). The application is running in limited mode.`;
-    }
-    return "The server is reachable, but API endpoints are failing. The application is running in limited mode.";
-  }
-  
-  // If browser is offline
-  if (!connectionDiagnostics.value.browserOnline) {
-    return "Your device appears to be offline. Please check your internet connection.";
-  }
-  
-  // If server is completely unreachable
-  if (!connectionDiagnostics.value.serverReachable && connectionDiagnostics.value.internetConnectivity) {
-    return "The server appears to be offline or unreachable. Please try again later.";
-  }
-  
-  return null;
+// Format date helper
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
-// Check specific API endpoint health
-const checkApiEndpoint = async (endpoint: string): Promise<boolean> => {
+// Check if we can connect to the database at all
+const checkDatabaseConnection = async () => {
   try {
-    apiDiagnostics.value.lastTestedEndpoint = endpoint;
+    debugInfo.value.connectionStatus = 'Checking...';
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    
-    const response = await fetch(endpoint, {
-      method: 'HEAD',
-      cache: 'no-store',
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    apiDiagnostics.value.lastStatus = response.status;
-    
-    if (response.ok) {
-      if (!apiDiagnostics.value.successfulEndpoints.includes(endpoint)) {
-        apiDiagnostics.value.successfulEndpoints.push(endpoint);
-      }
-      return true;
-    } else {
-      if (!apiDiagnostics.value.failedEndpoints.includes(endpoint)) {
-        apiDiagnostics.value.failedEndpoints.push(endpoint);
-      }
-      return false;
-    }
-  } catch (error) {
-    apiDiagnostics.value.lastStatus = 0;
-    apiDiagnostics.value.lastError = error instanceof Error ? error.message : 'Unknown error';
-    
-    if (!apiDiagnostics.value.failedEndpoints.includes(endpoint)) {
-      apiDiagnostics.value.failedEndpoints.push(endpoint);
-    }
-    
-    return false;
-  }
-};
-
-// Run comprehensive diagnostics
-const runDiagnostics = async () => {
-  try {
-    diagnosticsRunning.value = true;
-    connectionDiagnostics.value = null;
-    endpointChecks.value = [];
-    apiDiagnostics.value.failedEndpoints = [];
-    apiDiagnostics.value.successfulEndpoints = [];
-    
-    // Check server health
-    const healthResult = await checkServerHealth();
-    
-    // Run deeper diagnostics
-    const diagnosticInfo = await diagnoseServerConnection();
-    connectionDiagnostics.value = diagnosticInfo;
-    
-    // Check critical endpoints with enhanced endpoint testing
-    const criticalEndpoints = [
-      '/api/v1/health',
-      '/api/v1/health/ping', // Check direct health ping endpoint
-      '/api/v1/auth/current-user',
-      '/api/v1/users',
-      '/api/v1/activities',
-      '/api/v1' // Base API path
-    ];
-    
-    for (const endpoint of criticalEndpoints) {
-      try {
-        const startTime = Date.now();
-        const response = await fetch(endpoint, {
-          method: 'HEAD',
-          cache: 'no-store'
-        });
-        
-        const endTime = Date.now();
-        
-        endpointChecks.value.push({
-          endpoint,
-          reachable: response.ok,
-          status: response.status,
-          latency: endTime - startTime
-        });
-        
-        if (response.ok) {
-          if (!apiDiagnostics.value.successfulEndpoints.includes(endpoint)) {
-            apiDiagnostics.value.successfulEndpoints.push(endpoint);
-          }
-        } else {
-          if (!apiDiagnostics.value.failedEndpoints.includes(endpoint)) {
-            apiDiagnostics.value.failedEndpoints.push(endpoint);
-          }
-        }
-        
-      } catch (error) {
-        endpointChecks.value.push({
-          endpoint,
-          reachable: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
-        
-        if (!apiDiagnostics.value.failedEndpoints.includes(endpoint)) {
-          apiDiagnostics.value.failedEndpoints.push(endpoint);
-        }
-      }
-    }
-    
-    // Add API info to the diagnostics output
-    if (isDebugMode.value) {
-      console.log("API Diagnostics:", { 
-        failedEndpoints: apiDiagnostics.value.failedEndpoints,
-        successfulEndpoints: apiDiagnostics.value.successfulEndpoints
-      });
-    }
-    
-    console.log("Diagnostics complete:", { 
-      diagnosticInfo, 
-      endpointChecks: endpointChecks.value 
-    });
-    
-  } catch (error) {
-    console.error("Error running diagnostics:", error);
-  } finally {
-    diagnosticsRunning.value = false;
-  }
-};
-
-// Enhanced retry loading with API health check
-const retryLoading = async () => {
-  loading.value = true;
-  error.value = '';
-  authRetries.value = 0;
-  apiDiagnostics.value.retryAttempts++;
-  apiDiagnostics.value.lastRetryTimestamp = new Date();
-  
-  // Check API health before attempting to get current user
-  const healthEndpoint = '/api/v1/health';
-  const isApiHealthy = await checkApiEndpoint(healthEndpoint);
-  
-  if (isApiHealthy) {
-    console.log('API health check passed, proceeding with user fetch');
-    await getCurrentUser();
-  } else {
-    console.warn('API health check failed, attempting fallback method');
-    // Try an alternative endpoint
-    const altEndpoint = '/api/v1';
-    const isAltHealthy = await checkApiEndpoint(altEndpoint);
-    
-    if (isAltHealthy) {
-      console.log('Alternative API endpoint reachable, proceeding with user fetch');
-      await getCurrentUser();
-    } else {
-      console.error('All API endpoints unreachable, falling back to sample data');
-      error.value = 'API endpoints are unreachable. Showing sample data instead.';
-      await fetchSampleActivities();
-    }
-  }
-  
-  loading.value = false;
-};
-
-// Enhanced fetch sample activities with better error diagnosis
-const fetchSampleActivities = async () => {
-  showingSampleData.value = true;
-  console.log("Loading sample activities (API is unavailable)");
-  
-  // Run diagnostics when falling back to sample data to help troubleshoot
-  if (!connectionDiagnostics.value) {
-    try {
-      await runDiagnostics();
+    // First check if we can access the database
+    const startTime = Date.now();
+    const { data, error } = await supabase
+      .from('activities')
+      .select('count()', { count: 'exact', head: true });
       
-      // Set more specific error message based on diagnostics
-      if (connectionDiagnostics.value) {
-        const connectivityMessage = getConnectivityMessage();
-        if (connectivityMessage) {
-          error.value = connectivityMessage;
-        } else if (apiDiagnostics.value.failedEndpoints.length > 0) {
-          error.value = `API connectivity issue: ${apiDiagnostics.value.failedEndpoints.length} endpoints failed. Running in offline mode.`;
-        } else {
-          error.value = 'Unable to connect to server. Showing sample data instead.';
-        }
-      }
-    } catch (err) {
-      console.error("Failed to run diagnostics:", err);
-    }
-  }
-  
-  try {
-    // Get default activities
-    const allMockActivities = mockDataService.getDefaultActivities();
-    
-    if (!allMockActivities || allMockActivities.length === 0) {
-      // Handle empty mock data
-      error.value = 'No sample activities available.';
-      activities.value = [];
+    if (error) {
+      debugInfo.value.connectionStatus = 'Error';
+      debugInfo.value.lastError = error.message;
+      debugInfo.value.databaseAccessible = false;
       return;
     }
     
-    // Create a consistent user profile
-    const user = currentUser.value || {
-      id: 'sample-user',
-      first_name: 'Demo',
-      last_name: 'User',
-      email: 'demo@example.com'
-    };
+    const duration = Date.now() - startTime;
+    debugInfo.value.connectionStatus = `Connected (${duration}ms)`;
+    debugInfo.value.databaseAccessible = true;
     
-    const userProfilePicture = currentUser.value?.profilePicture || 
-                              currentUser.value?.profile_picture_url || 
-                              `https://ui-avatars.com/api/?name=${encodeURIComponent(user.first_name || '')}&background=random`;
-    
-    // Filter and modify activities to be from the current user
-    const filteredActivities = allMockActivities.map((activity, index) => ({
-      ...activity,
-      id: activity.id || `sample-${Date.now()}-${index}`,
-      user_id: user.id,
-      user: {
-        id: user.id,
-        name: `${user.first_name} ${user.last_name}`.trim(),
-        email: user.email,
-        profilePicture: userProfilePicture
-      }
-    }));
-    
-    activities.value = filteredActivities;
-    console.log(`Loaded ${activities.value.length} sample activities for current user`);
+    // Get sample of activities in database
+    const { data: sampleActivities, error: sampleError } = await supabase
+      .from('activities')
+      .select('id, user_id, title')
+      .limit(5);
+      
+    if (!sampleError && sampleActivities) {
+      debugInfo.value.activities = sampleActivities;
+      
+      // Get unique user IDs from activities
+      const userIds = [...new Set(sampleActivities.map(a => a.user_id))];
+      debugInfo.value.userIds = userIds;
+    }
   } catch (err) {
-    console.error('Error loading sample activities:', err);
-    activities.value = [];
-    error.value = 'Unable to load any activities.';
-  } finally {
-    loading.value = false;
+    debugInfo.value.connectionStatus = 'Error';
+    debugInfo.value.lastError = err.message || 'Unknown error';
+    debugInfo.value.databaseAccessible = false;
   }
 };
 
-// Get current user with retry logic
+// Test using another user ID from the database
+const testWithUserId = async (userId: string) => {
+  try {
+    const { data: testActivities, error: testError } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(3);
+      
+    if (testError) {
+      alert(`Error testing with user ID ${userId}: ${testError.message}`);
+      return;
+    }
+    
+    if (testActivities && testActivities.length > 0) {
+      alert(`Success! Found ${testActivities.length} activities for user ${userId}`);
+    } else {
+      alert(`No activities found for user ${userId}`);
+    }
+  } catch (err) {
+    alert(`Error: ${err.message || 'Unknown error'}`);
+  }
+};
+
+// Create a test activity for the current user
+const createTestActivity = async () => {
+  if (!currentUser.value?.id) {
+    alert('No current user to create activity for');
+    return;
+  }
+  
+  try {
+    const newActivity = {
+      user_id: currentUser.value.id,
+      title: 'Test Activity',
+      description: 'Created from debug panel',
+      type: 'test',
+      created_at: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase
+      .from('activities')
+      .insert([newActivity])
+      .select();
+      
+    if (error) {
+      alert(`Error creating test activity: ${error.message}`);
+      return;
+    }
+    
+    alert('Test activity created successfully!');
+    fetchUserActivities(); // Refresh activities
+  } catch (err) {
+    alert(`Error: ${err.message || 'Unknown error'}`);
+  }
+};
+
+// Get current user with retry logic - similar to FriendsActivityView approach
 const getCurrentUser = async () => {
   try {
     console.log('Attempting to get current user in MyActivityView');
@@ -377,6 +196,295 @@ const getCurrentUser = async () => {
   }
 };
 
+// Fetch user activities - primary function
+const fetchUserActivities = async () => {
+  if (!currentUser.value?.id) {
+    console.warn('No user ID available for fetchUserActivities');
+    await fetchSampleActivities();
+    return;
+  }
+
+  try {
+    console.log(`Fetching activities for user ${currentUser.value.id}`);
+    
+    // Debug user info to make sure it matches what's in the database
+    if (isDebugMode.value) {
+      console.log('Current user object:', JSON.stringify(currentUser.value));
+    }
+    
+    // Get activities for the current user
+    const { data: activitiesData, error: activitiesError } = await supabase
+      .from('activities')
+      .select(`
+        *,
+        user:user_id (
+          id, first_name, last_name, email, role, profile_picture_url
+        ),
+        comments:activity_comments (
+          id, user_id, comment, created_at,
+          user:user_id (
+            id, first_name, last_name, profile_picture_url
+          )
+        )
+      `)
+      .eq('user_id', currentUser.value.id)
+      .order('created_at', { ascending: false });
+      
+    if (activitiesError) {
+      // Improve error logging to show detailed error information
+      console.error("Error fetching user activities:", {
+        message: activitiesError.message,
+        details: activitiesError.details,
+        hint: activitiesError.hint,
+        code: activitiesError.code
+      });
+      
+      // Try a simpler query to see if it's a query structure issue
+      console.log("Trying simpler query to debug...");
+      const { data: simpleCheck, error: simpleError } = await supabase
+        .from('activities')
+        .select('id, user_id')
+        .limit(5);
+        
+      if (simpleError) {
+        console.error("Simple query also failed:", simpleError);
+      } else {
+        console.log("Simple query succeeded, found activities:", simpleCheck);
+        if (simpleCheck && simpleCheck.length > 0) {
+          console.log("Sample user_ids in database:", simpleCheck.map(a => a.user_id));
+        }
+      }
+      
+      await fetchSampleActivities();
+      return;
+    }
+    
+    if (!activitiesData || activitiesData.length === 0) {
+      console.warn(`No activities found for user ID: ${currentUser.value.id}`);
+      
+      // Check if there are any activities in the database at all
+      const { data: anyActivities } = await supabase
+        .from('activities')
+        .select('id, user_id')
+        .limit(5);
+        
+      if (anyActivities && anyActivities.length > 0) {
+        console.log("Activities exist but none for this user. Sample user_ids:", 
+          anyActivities.map(a => a.user_id));
+      } else {
+        console.log("No activities found in the database at all");
+      }
+      
+      await fetchSampleActivities();
+      return;
+    }
+    
+    console.log(`Found ${activitiesData.length} user activities`);
+    processActivities(activitiesData);
+    showingSampleData.value = false;
+    
+  } catch (err) {
+    console.error('Failed to load user activities:', err);
+    error.value = 'Failed to load your activities. Showing sample data instead.';
+    await fetchSampleActivities();
+  }
+};
+
+// Fetch sample activities when API is unavailable
+const fetchSampleActivities = async () => {
+  showingSampleData.value = true;
+  console.log("Loading sample activities (API is unavailable)");
+  
+  try {
+    // Get default activities
+    const allMockActivities = mockDataService.getDefaultActivities();
+    
+    if (!allMockActivities || allMockActivities.length === 0) {
+      // Handle empty mock data
+      error.value = 'No sample activities available.';
+      activities.value = [];
+      return;
+    }
+    
+    // Create a consistent user profile
+    const user = currentUser.value || {
+      id: 'sample-user',
+      first_name: 'Demo',
+      last_name: 'User',
+      email: 'demo@example.com'
+    };
+    
+    const userProfilePicture = currentUser.value?.profilePicture || 
+                              currentUser.value?.profile_picture_url || 
+                              `https://ui-avatars.com/api/?name=${encodeURIComponent(user.first_name || '')}&background=random`;
+    
+    // Filter and modify activities to be from the current user
+    const filteredActivities = allMockActivities.map((activity, index) => ({
+      ...activity,
+      id: activity.id || `sample-${Date.now()}-${index}`,
+      user_id: user.id,
+      user: {
+        id: user.id,
+        name: `${user.first_name} ${user.last_name}`.trim(),
+        email: user.email,
+        profilePicture: userProfilePicture
+      }
+    }));
+    
+    activities.value = filteredActivities;
+    console.log(`Loaded ${activities.value.length} sample activities for current user`);
+  } catch (err) {
+    console.error('Error loading sample activities:', err);
+    activities.value = [];
+    error.value = 'Unable to load any activities.';
+  } finally {
+    loading.value = false;
+  }
+};
+
+// Process activities data into the correct format
+const processActivities = (activitiesData: any[]) => {
+  activities.value = activitiesData.map(activity => ({
+    ...activity,
+    user: activity.user ? {
+      id: activity.user.id,
+      name: `${activity.user.first_name} ${activity.user.last_name}`,
+      email: activity.user.email,
+      role: activity.user.role,
+      profilePicture: activity.user.profile_picture_url
+    } : {
+      id: currentUser.value?.id || 'unknown',
+      name: currentUser.value ? `${currentUser.value.first_name} ${currentUser.value.last_name}` : 'You',
+      email: currentUser.value?.email || '',
+      role: currentUser.value?.role || 'user',
+      profilePicture: currentUser.value?.profilePicture || null
+    },
+    // Convert comments from array to count if needed
+    comments: Array.isArray(activity.comments) ? activity.comments.length : (activity.comments || 0)
+  }));
+  console.log(`Processed ${activities.value.length} activities`);
+};
+
+// Try loading data again
+const retryLoading = async () => {
+  loading.value = true;
+  error.value = '';
+  authRetries.value = 0;
+  await getCurrentUser();
+};
+
+// Like Activity
+const likeActivity = async (activityId: string) => {
+  if (!currentUser.value?.id) return;
+  
+  try {
+    await supabaseActivities.likeActivity(activityId, currentUser.value.id);
+    
+    // Update the activity in the list
+    const activity = activities.value.find(a => a.id === activityId);
+    if (activity) {
+      activity.likes = (activity.likes || 0) + 1;
+    }
+  } catch (err) {
+    console.error('Failed to like activity:', err);
+  }
+};
+
+// Add comment
+const addComment = async (activityId: string, comment: string) => {
+  if (!currentUser.value?.id || !comment.trim()) return;
+  
+  try {
+    await supabaseActivities.addComment(activityId, currentUser.value.id, comment);
+    
+    // Update the activity in the list
+    const activity = activities.value.find(a => a.id === activityId);
+    if (activity) {
+      activity.comments = (activity.comments || 0) + 1;
+    }
+    
+    // Refresh activities to show the new comment
+    fetchUserActivities();
+  } catch (err) {
+    console.error('Failed to add comment:', err);
+  }
+};
+
+// Delete activity with better error handling
+const deleteActivity = async (id: string) => {
+  try {
+    if (!currentUser.value?.id) {
+      console.error('Cannot delete activity: User not authenticated');
+      return;
+    }
+    
+    if (id.startsWith('sample-')) {
+      // For sample activities, just remove from the local array
+      activities.value = activities.value.filter(a => a.id !== id);
+      return;
+    }
+    
+    console.log(`Attempting to delete activity ${id} for user ${currentUser.value.id}`);
+    
+    // Try using the service function first
+    try {
+      await supabaseActivities.deleteActivity(id);
+      console.log(`Successfully deleted activity ${id}`);
+      activities.value = activities.value.filter(a => a.id !== id);
+      return;
+    } catch (serviceErr) {
+      console.warn('Service delete failed, falling back to direct query:', serviceErr);
+    }
+    
+    // Fall back to direct query
+    const { error: deleteError } = await supabase
+      .from('activities')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', currentUser.value.id); // Ensure user can only delete their own activities
+    
+    if (deleteError) {
+      console.error('Failed to delete activity:', deleteError);
+      return;
+    }
+    
+    console.log(`Successfully deleted activity ${id}`);
+    activities.value = activities.value.filter(a => a.id !== id);
+  } catch (err) {
+    console.error('Exception when deleting activity:', err);
+  }
+};
+
+// Extract metrics from activity for display
+const getActivityMetrics = (activity: Activity) => {
+  let metrics: Record<string, string> = {};
+  
+  // Add type-specific metrics depending on the activity type
+  switch (activity.type?.toLowerCase()) {
+    case 'running':
+      metrics = { distance: '5 km', pace: '5:30 min/km', duration: '27:30' };
+      break;
+    case 'cycling':
+      metrics = { distance: '25 km', speed: '20 km/h', duration: '1:15:00' };
+      break;
+    case 'swimming':
+      metrics = { distance: '1000 m', laps: '20', duration: '25:00' };
+      break;
+    case 'strength':
+      metrics = { sets: '4', reps: '12', weight: 'varied' };
+      break;
+    case 'yoga':
+    case 'pilates':
+    case 'dance':
+      metrics = { duration: '45:00', intensity: 'moderate', focus: 'full body' };
+      break;
+    default:
+      metrics = { duration: '45:00' };
+  }
+  
+  return metrics;
+};
+
 onMounted(() => {
   console.log('MyActivityView mounted, initializing...');
   getCurrentUser();
@@ -392,69 +500,13 @@ onMounted(() => {
       🐞
     </button>
     
-    <!-- Enhanced ConnectionErrorMessage with API diagnostics -->
-    <ConnectionErrorMessage 
-      v-if="showingSampleData" 
-      :onRetry="retryLoading"
-      :showDetails="isDebugMode"
-      :errorMessage="error || debugInfo.lastError"
-      :diagnostics="connectionDiagnostics"
-      :onRunDiagnostics="runDiagnostics"
-      :isDiagnosticsRunning="diagnosticsRunning"
-      :connectionStatus="connectionStatus"
-      :endpointChecks="endpointChecks"
-      :connectivityMessage="getConnectivityMessage()"
-    />
-    
-    <!-- Add API connectivity warning for limited mode -->
-    <div v-if="connectionStatus === 'limited' && !showingSampleData" class="api-warning">
-      <div class="warning-icon">⚠️</div>
-      <div class="warning-message">
-        <p><strong>Limited Connectivity:</strong> Some API features may not work correctly.</p>
-        <button @click="runDiagnostics" class="warning-action" :disabled="diagnosticsRunning">
-          {{ diagnosticsRunning ? 'Running Diagnostics...' : 'Run Diagnostics' }}
-        </button>
-      </div>
+    <div v-if="showingSampleData" class="notification is-warning">
+      <p><strong>Note:</strong> Showing sample data because we couldn't connect to the server.</p>
     </div>
     
     <!-- Add current user debug info -->
     <div v-if="isDebugMode" class="debug-info">
       <h3>Debug Info</h3>
-      
-      <!-- Additional API diagnostics section -->
-      <div class="debug-section">
-        <h4>API Diagnostics</h4>
-        <p><strong>Failed Endpoints:</strong> {{ apiDiagnostics.failedEndpoints.length }}</p>
-        <ul v-if="apiDiagnostics.failedEndpoints.length">
-          <li v-for="(endpoint, index) in apiDiagnostics.failedEndpoints" :key="index">
-            {{ endpoint }}
-          </li>
-        </ul>
-        <p><strong>Successful Endpoints:</strong> {{ apiDiagnostics.successfulEndpoints.length }}</p>
-        <ul v-if="apiDiagnostics.successfulEndpoints.length">
-          <li v-for="(endpoint, index) in apiDiagnostics.successfulEndpoints" :key="index">
-            {{ endpoint }}
-          </li>
-        </ul>
-        <p><strong>Last Tested:</strong> {{ apiDiagnostics.lastTestedEndpoint || 'None' }}</p>
-        <p><strong>Last Status:</strong> {{ apiDiagnostics.lastStatus || 'N/A' }}</p>
-        <p><strong>Retry Attempts:</strong> {{ apiDiagnostics.retryAttempts }}</p>
-        <p v-if="apiDiagnostics.lastRetryTimestamp">
-          <strong>Last Retry:</strong> {{ apiDiagnostics.lastRetryTimestamp.toLocaleTimeString() }}
-        </p>
-        <div class="debug-actions">
-          <button @click="checkApiEndpoint('/api/v1/health')" class="button is-small is-info">
-            Test Health
-          </button>
-          <button @click="checkApiEndpoint('/api/v1/auth/current-user')" class="button is-small is-info">
-            Test Auth
-          </button>
-          <button @click="checkApiEndpoint('/api/v1')" class="button is-small is-info">
-            Test Base API
-          </button>
-        </div>
-      </div>
-      
       <div class="debug-section">
         <h4>Current User</h4>
         <p><strong>ID:</strong> {{ currentUser?.id || 'None' }}</p>
@@ -469,10 +521,6 @@ onMounted(() => {
           <button @click="createTestActivity" class="button is-small is-success">
             Create Test Activity
           </button>
-          <button @click="runDiagnostics" class="button is-small is-warning" 
-                  :class="{'is-loading': diagnosticsRunning}">
-            Run Diagnostics
-          </button>
         </div>
       </div>
       
@@ -484,63 +532,6 @@ onMounted(() => {
         <button @click="checkDatabaseConnection" class="button is-small is-info">
           Check Connection
         </button>
-      </div>
-      
-      <div v-if="connectionDiagnostics" class="debug-section">
-        <h4>Connection Diagnostics</h4>
-        <div v-if="connectionDiagnostics.browserOnline !== undefined">
-          <p><strong>Browser Online:</strong> 
-            <span :class="connectionDiagnostics.browserOnline ? 'tag is-success' : 'tag is-danger'">
-              {{ connectionDiagnostics.browserOnline ? 'Yes' : 'No' }}
-            </span>
-          </p>
-        </div>
-        <div v-if="connectionDiagnostics.internetConnectivity !== undefined">
-          <p><strong>Internet Connectivity:</strong> 
-            <span :class="connectionDiagnostics.internetConnectivity ? 'tag is-success' : 'tag is-danger'">
-              {{ connectionDiagnostics.internetConnectivity ? 'Yes' : 'No' }}
-            </span>
-          </p>
-        </div>
-        <div v-if="connectionDiagnostics.serverReachable !== undefined">
-          <p><strong>Server Reachable:</strong> 
-            <span :class="connectionDiagnostics.serverReachable ? 'tag is-success' : 'tag is-danger'">
-              {{ connectionDiagnostics.serverReachable ? 'Yes' : 'No' }}
-            </span>
-          </p>
-        </div>
-        <div v-if="connectionDiagnostics.possibleIssues?.length">
-          <p><strong>Possible Issues:</strong></p>
-          <ul>
-            <li v-for="(issue, index) in connectionDiagnostics.possibleIssues" :key="index">
-              {{ issue }}
-            </li>
-          </ul>
-        </div>
-      </div>
-      
-      <div v-if="endpointChecks.length > 0" class="debug-section">
-        <h4>API Endpoint Checks</h4>
-        <table class="debug-table">
-          <thead>
-            <tr>
-              <th>Endpoint</th>
-              <th>Status</th>
-              <th>Latency</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(check, index) in endpointChecks" :key="index">
-              <td>{{ check.endpoint }}</td>
-              <td>
-                <span :class="check.reachable ? 'tag is-success' : 'tag is-danger'">
-                  {{ check.reachable ? 'OK' : check.status || 'Error' }}
-                </span>
-              </td>
-              <td>{{ check.latency ? `${check.latency}ms` : 'N/A' }}</td>
-            </tr>
-          </tbody>
-        </table>
       </div>
       
       <div v-if="debugInfo.activities.length > 0" class="debug-section">
@@ -571,6 +562,18 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
+      </div>
+      
+      <div v-if="debugInfo.userIds.length > 0" class="debug-section">
+        <h4>User IDs with Activities</h4>
+        <div class="user-ids-list">
+          <div v-for="userId in debugInfo.userIds" :key="userId" class="user-id-item">
+            <code>{{ userId }}</code>
+            <button @click="testWithUserId(userId)" class="button is-small is-link">
+              Test User ID {{ userId }}
+            </button>
+          </div>
+        </div>
       </div>
       
       <div class="debug-section">
@@ -1046,81 +1049,5 @@ code {
   background-color: rgba(0, 0, 0, 0.2);
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
-}
-
-.tag.is-success {
-  background-color: #48c78e;
-  color: white;
-}
-
-.tag.is-danger {
-  background-color: #ff3860;
-  color: white;
-}
-
-.tag.is-warning {
-  background-color: #ffd14a;
-  color: #3e2800;
-}
-
-.tag {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  margin-left: 0.25rem;
-}
-
-.debug-section ul {
-  margin-left: 1.5rem;
-  list-style-type: disc;
-}
-
-.debug-section li {
-  margin-bottom: 0.25rem;
-}
-
-/* Add styles for API warning */
-.api-warning {
-  display: flex;
-  align-items: center;
-  background-color: rgba(255, 204, 0, 0.15);
-  border-left: 4px solid #ffcc00;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1.5rem;
-  border-radius: 4px;
-}
-
-.warning-icon {
-  font-size: 1.5rem;
-  margin-right: 1rem;
-}
-
-.warning-message {
-  flex: 1;
-}
-
-.warning-message p {
-  margin: 0;
-}
-
-.warning-action {
-  background-color: transparent;
-  border: 1px solid rgba(255, 204, 0, 0.5);
-  color: #ffcc00;
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
-  margin-top: 0.5rem;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-}
-
-.warning-action:hover:not(:disabled) {
-  background-color: rgba(255, 204, 0, 0.2);
-}
-
-.warning-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 </style>

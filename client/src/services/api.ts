@@ -42,7 +42,7 @@ export const authService = {
   async getCurrentUser() {
     try {
       console.log('[API Service] Fetching current user...');
-      const response = await api.get('/auth/current-user');
+      const response = await api.get('/api/v1/auth/current-user');
       console.log('[API Service] Current user response:', response.data);
       return response.data;
     } catch (error) {

@@ -1,16 +1,6 @@
 import axios from 'axios';
 import { supabase } from './supabase';
 
-// Get the API URL from environment variables with fallback
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-// Create axios instance with proper baseURL and timeout
-const api = axios.create({
-  baseURL: API_URL,
-  timeout: 10000, // Increase timeout to 10 seconds
-  withCredentials: true // Important for cookies
-});
-
 // Add token refresh interceptor
 axios.interceptors.response.use(
   response => response,
@@ -39,13 +29,23 @@ axios.interceptors.response.use(
   }
 );
 
+// Create a base API instance
+const api = axios.create({
+  baseURL: '/api/v1',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  withCredentials: true // Important for cookies/auth
+});
+
 // Enhance getDemoUsers method with better error handling and fallbacks
 const getDemoUsers = async () => {
   try {
     // Log the request start time
     console.log(`Fetching demo users at ${new Date().toLocaleTimeString()}`);
     
-    const response = await api.get('/api/v1/auth/demo-users', {
+    // Use a consistent URL format - either with or without /api/v1
+    const response = await axios.get('/api/v1/auth/demo-users', {
       timeout: 5000, // Set a reasonable timeout
       headers: {
         'Cache-Control': 'no-cache'
@@ -110,41 +110,27 @@ const getFallbackDemoUsers = async () => {
 export const authService = {
   login: async (username, password) => {
     try {
-      // Fix the API path - ensure it has the correct prefix
-      const loginPath = '/api/v1/auth/login';
-      console.log(`Sending login request to: ${loginPath}`);
-      
-      const response = await api.post(loginPath, { username, password });
+      // Ensure consistent URL format
+      const response = await api.post('/api/v1/auth/login', { username, password });
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
-      
-      // Improved error handling
-      if (error.code === 'ERR_NETWORK') {
-        return {
-          success: false,
-          message: 'Cannot connect to server. Please check if the server is running.'
-        };
-      }
-      
       return {
         success: false,
-        message: error.response?.data?.message || error.message || 'Login failed - please check your credentials'
+        message: error instanceof Error ? error.message : 'Login failed'
       };
     }
   },
   
   logout: async () => {
     try {
-      // Fix the API path - ensure it has the correct prefix
-      const logoutPath = '/api/v1/auth/logout';
-      const response = await api.post(logoutPath);
+      const response = await api.post('/api/v1/auth/logout');
       return response.data;
     } catch (error) {
       console.error('Logout error:', error);
       return {
         success: false,
-        message: error.message || 'Logout failed'
+        message: error instanceof Error ? error.message : 'Logout failed'
       };
     }
   },
@@ -156,22 +142,56 @@ export const authService = {
     while (retries >= 0) {
       try {
         console.log(`Attempting to get current user (${retries} retries left)`);
-        // Fix the API path - ensure it has the correct prefix
-        const userPath = '/api/v1/auth/current-user';
-        const response = await api.get(userPath);
+        const response = await api.get('/auth/current-user');
         return response.data;
       } catch (err) {
         lastError = err;
-        retries--;
-        if (retries >= 0) {
-          console.warn(`Error fetching current user, retrying (${retries} attempts left)`, err);
-          await new Promise(r => setTimeout(r, 1000)); // Wait 1 second before retrying
+        
+        // If it's a 401 Unauthorized, the user is simply not logged in - don't retry
+        if (err.response && err.response.status === 401) {
+          console.log('User not authenticated (401) - this is normal for guests');
+          break;
+        }
+        
+        // Only retry on connection errors
+        if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
+          retries--;
+          if (retries >= 0) {
+            console.log(`Connection failed, retrying ${retries} more times...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+            continue;
+          }
+        } else {
+          // Log non-401 errors as actual errors
+          console.error(`Get current user failed with ${err.response?.status || 'unknown'} error:`, err);
+          break; // Don't retry on other errors
         }
       }
     }
     
-    console.error('Failed to get current user after retries:', lastError);
-    throw lastError;
+    // If server is down, return a standardized offline response
+    if (lastError && (lastError.code === 'ECONNREFUSED' || lastError.code === 'ERR_NETWORK')) {
+      console.warn('API server appears to be offline');
+      return {
+        success: false,
+        message: 'API server is offline or unreachable',
+        offline: true
+      };
+    }
+    
+    // For 401 errors, return a standardized unauthorized response
+    if (lastError && lastError.response && lastError.response.status === 401) {
+      return {
+        success: false,
+        message: 'User is not authenticated',
+        unauthorized: true
+      };
+    }
+    
+    return {
+      success: false,
+      message: lastError instanceof Error ? lastError.message : 'Failed to get current user'
+    };
   },
   
   getDemoUsers
@@ -181,7 +201,7 @@ export const authService = {
 export const userService = {
   getUsers: async () => {
     try {
-      const response = await api.get('/api/v1/users');
+      const response = await api.get('/users');
       return response.data;
     } catch (error) {
       console.error('Get users error:', error);
@@ -195,7 +215,7 @@ export const userService = {
   
   getUserById: async (id) => {
     try {
-      const response = await api.get(`/api/v1/users/${id}`);
+      const response = await api.get(`/users/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Get user ${id} error:`, error);
@@ -208,7 +228,7 @@ export const userService = {
   
   updateUser: async (id, userData) => {
     try {
-      const response = await api.put(`/api/v1/users/${id}`, userData);
+      const response = await api.put(`/users/${id}`, userData);
       return response.data;
     } catch (error) {
       console.error(`Update user ${id} error:`, error);
@@ -221,7 +241,7 @@ export const userService = {
   
   delete: async (id) => {
     try {
-      const response = await api.delete(`/api/v1/users/${id}`);
+      const response = await api.delete(`/users/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Delete user ${id} error:`, error);
@@ -320,7 +340,6 @@ export const healthService = {
           });
           
           clearTimeout(timeoutId);
-          
           results.endpoints[endpoint] = {
             status: resp.status,
             ok: resp.ok

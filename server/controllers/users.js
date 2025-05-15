@@ -339,4 +339,33 @@ router.get('/:userId/friendship/:friendId', async (req, res) => {
   }
 });
 
+// Search users endpoint
+router.get('/search', async (req, res) => {
+  const query = req.query.query;
+  const limit = parseInt(req.query.limit) || 5;
+  
+  if (!query) {
+    return res.status(400).json({
+      success: false,
+      message: 'Query parameter is required'
+    });
+  }
+  
+  try {
+    const users = await userModel.search(query, limit);
+    
+    return res.json({
+      success: true,
+      items: users,
+      count: users.length
+    });
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error searching users'
+    });
+  }
+});
+
 module.exports = router;

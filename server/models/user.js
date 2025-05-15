@@ -253,6 +253,33 @@ const userModel = {
         activity_type_distribution: {}
       };
     }
+  },
+
+  /**
+   * Search users by query
+   * @param {string} query - Search query
+   * @param {number} limit - Maximum number of results to return
+   * @returns {Promise<Array>} List of matching users
+   */
+  async search(query, limit = 5) {
+    if (DEBUG) console.log(`[User Model] Searching users with query: ${query}`);
+    
+    try {
+      // Use text search to match query against multiple fields
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, first_name, last_name, role, profile_picture_url')
+        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%`)
+        .limit(limit);
+        
+      if (error) throw new Error(`Failed to search users: ${error.message}`);
+      
+      if (DEBUG) console.log(`[User Model] Found ${data?.length || 0} users matching query`);
+      return data || [];
+    } catch (err) {
+      console.error('[User Model] Error searching users:', err);
+      throw err;
+    }
   }
 };
 

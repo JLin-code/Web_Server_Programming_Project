@@ -49,10 +49,14 @@ const MAX_PORT_ATTEMPTS = 10; // Try up to 10 ports before giving up
 
 const app = express();
 
-// Define allowed origins
+// Check if client dist directory exists before trying to serve it
+const clientDistPath = path.join(__dirname, '../client/dist');
+const clientDistExists = fs.existsSync(clientDistPath);
+
+// Define allowed origins from environment or defaults
 const allowedOrigins = [
   process.env.CLIENT_URL || 'http://localhost:5173',
-  'https://clientsidewebsite.onrender.com'
+  'https://clientsidewebsite.onrender.com',
 ];
 
 // CORS configuration
@@ -88,11 +92,13 @@ function startServer(port, attempt = 1) {
       // Test Supabase connection on server start
       console.log('Testing Supabase connection...');
       await testConnection();
+      console.log('Testing database connection...');
       
       if (clientDistExists) {
         console.log('\x1b[32m%s\x1b[0m', `Client app is being served from ${clientDistPath}`);
       } else {
         console.log('\x1b[33m%s\x1b[0m', 'Note: Client app is not built. Using remote client at https://clientsidewebsite.onrender.com');
+        console.log('\x1b[33m%s\x1b[0m', `API-only mode active. Client should connect to: ${process.env.SERVER_URL || `http://localhost:${actualPort}`}`);
       }
     })
     .on('error', (err) => {
@@ -108,10 +114,7 @@ function startServer(port, attempt = 1) {
     });
 }
 
-// Check if client dist directory exists before trying to serve it
-const clientDistPath = path.join(__dirname, '../client/dist');
-const clientDistExists = fs.existsSync(clientDistPath);
-
+// Serve static files if client dist exists
 if (clientDistExists) {
   // Serve static files from the client distribution folder
   app.use('/', express.static(clientDistPath));
@@ -122,10 +125,11 @@ if (clientDistExists) {
 
 // API root endpoint
 app.get('/api/v1', (req, res) => {
+  const version = process.env.API_VERSION || '1.0';
   res.json({
     status: 'success',
     message: 'Welcome to the Fitness Tracker API',
-    version: '1.0',
+    version,
     endpoints: {
       auth: '/api/v1/auth',
       users: '/api/v1/users',
@@ -137,17 +141,13 @@ app.get('/api/v1', (req, res) => {
 });
 
 // Public routes
-app.use('/api/v1/auth', authController.router);
 app.get('/api/health', (req, res) => {
   res.json({ status: 'UP', timestamp: new Date() });
 });
 
-// Register API routes
 app.use('/api/v1/auth', authController.router);
-app.use('/api/v1/users', usersController);
-app.use('/api/v1/activities', activitiesController);
-app.use('/api/v1/friends', friendsController);
-app.use('/api/v1/comments', commentsController);
+
+// System controller registration if available
 if (systemController && typeof systemController === 'function') {
   app.use('/api', systemController);
 }
@@ -156,10 +156,11 @@ if (systemController && typeof systemController === 'function') {
 app.use('/api/v1/users', authController.verifyToken, usersController);
 app.use('/api/v1/friends', authController.verifyToken, friendsController);
 app.use('/api/v1/activities', authController.verifyToken, activitiesController);
+app.use('/api/v1/comments', authController.verifyToken, commentsController);
 
 // Catch-all route - modified to handle missing client/dist directory properly
 app.get('*', (req, res, next) => {
-  // Only attempt to serve client app if it's an API request or the directory exists
+  // Only attempt to serve client app if it's not an API request
   if (req.path.startsWith('/api/')) {
     return next();
   }
@@ -172,7 +173,7 @@ app.get('*', (req, res, next) => {
       <p>API endpoints are available at <a href="/api/v1" style="color: blue; text-decoration: underline;">/api/v1</a></p>
     `);
   }
-
+  
   // If we get here, the client/dist directory exists
   try {
     res.sendFile(path.join(clientDistPath, 'index.html'));

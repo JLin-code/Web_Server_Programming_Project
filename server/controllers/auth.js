@@ -2,11 +2,10 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const userModel = require('../models/user');
-const { getAllDemoUsers } = require('../data/demoUsers');
 const router = express.Router();
 
 // Environment variables
-const JWT_SECRET = process.env.JWT_SECRET || 'your-default-jwt-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'yeaPFIpn56XoAPhl+bgT2/ywZohFp6iYB2N5s9WxKU9cSsdcxaxWNzl/HKjILh/Lcr+w/Eyfp2aI8OqfwXytGLA==';
 const JWT_EXPIRY = process.env.JWT_EXPIRY || '24h';
 
 // Add debug logging
@@ -28,46 +27,6 @@ router.post('/login', async (req, res) => {
     const user = await userModel.getByEmail(username);
     
     if (!user) {
-      // If user not found in database, check if it's a demo user
-      const demoUserData = getDemoUserByUsername(username);
-      
-      if (demoUserData) {
-        // For demo users, accept any password (simplified for demo purposes)
-        if (DEBUG) console.log(`[Auth Controller] Using demo user: ${username}`);
-        
-        // Create a simplified user object from demo data
-        const demoUser = {
-          id: `demo-${Date.now()}`,
-          first_name: demoUserData.firstName || demoUserData.displayName.split(' ')[0],
-          last_name: demoUserData.lastName || demoUserData.displayName.split(' ').slice(1).join(' '),
-          email: username,
-          role: demoUserData.isAdmin ? 'admin' : 'user'
-        };
-        
-        // Create token for demo user
-        const token = jwt.sign(
-          { 
-            id: demoUser.id,
-            email: demoUser.email,
-            role: demoUser.role 
-          },
-          JWT_SECRET,
-          { expiresIn: JWT_EXPIRY }
-        );
-        
-        // Set token in cookie
-        res.cookie('auth_token', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          maxAge: 24 * 60 * 60 * 1000 // 24 hours
-        });
-        
-        return res.json({
-          success: true,
-          user: demoUser
-        });
-      }
-      
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -201,53 +160,6 @@ router.get('/current-user', async (req, res) => {
   }
 });
 
-// Demo users for development - provides dummy users for login form
-router.get('/demo-users', async (req, res) => {
-  try {
-    console.log('Fetching users for login dropdown');
-    
-    // First try to get real users from database
-    let users = [];
-    let source = 'database';
-    
-    try {
-      const dbUsers = await userModel.getAll();
-      
-      if (dbUsers && dbUsers.length > 0) {
-        users = dbUsers.map(user => ({
-          username: user.email, 
-          displayName: `${user.first_name} ${user.last_name}${user.role === 'admin' ? ' (Admin)' : ''}`,
-          isAdmin: user.role === 'admin'
-        }));
-        console.log(`Returning ${users.length} users from database`);
-      }
-    } catch (dbError) {
-      console.warn('Database error fetching users, using fallback:', dbError);
-      source = 'fallback';
-    }
-    
-    // If no users from database, use our fallback demo users
-    if (users.length === 0) {
-      users = demoUsers;
-      console.log(`Returning ${users.length} fallback demo users`);
-    }
-    
-    return res.json({
-      success: true,
-      users: users,
-      source: source
-    });
-    
-  } catch (error) {
-    console.error('Error fetching users for dropdown:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error retrieving users',
-      users: []
-    });
-  }
-});
-
 // Middleware for verifying JWT tokens
 const verifyToken = (req, res, next) => {
   const token = req.cookies.auth_token;
@@ -282,31 +194,6 @@ const isAdmin = (req, res, next) => {
     message: 'Access denied. Admin role required.'
   });
 };
-
-// Mock demo users for development and testing
-const demoUsers = [
-  {
-    username: 'admin@example.com',
-    displayName: 'Admin User (Administrator)',
-    firstName: 'Admin',
-    lastName: 'User',
-    isAdmin: true
-  },
-  {
-    username: 'user@example.com',
-    displayName: 'Regular User',
-    firstName: 'Regular',
-    lastName: 'User',
-    isAdmin: false
-  },
-  {
-    username: 'demo@example.com',
-    displayName: 'Demo User',
-    firstName: 'Demo',
-    lastName: 'User',
-    isAdmin: false
-  }
-];
 
 // Basic middleware to verify JWT token
 // This is a placeholder - in a real app, you'd verify the token properly

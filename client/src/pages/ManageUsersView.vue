@@ -21,9 +21,15 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const searchQuery = ref('');
 const selectedUser = ref<User | null>(null);
+const searchResults = ref<User[]>([]);
+const isSearching = ref(false);
 
 // Computed property to filter users based on search query
 const filteredUsers = computed(() => {
+  if (selectedUser.value) {
+    return users.value.filter(user => user.id === selectedUser.value?.id);
+  }
+  
   if (!searchQuery.value) return users.value;
   
   const query = searchQuery.value.toLowerCase();
@@ -47,69 +53,6 @@ const userForm = ref({
 
 // For modal
 const isModalActive = ref(false);
-
-// New user functionality
-const showAddUser = ref(false);
-const newUserForm = ref({
-  firstName: '',
-  lastName: '',
-  email: '',
-  role: 'user'
-});
-const roleOptions = ref([
-  { label: 'Regular User', value: 'user' },
-  { label: 'Administrator', value: 'admin' }
-]);
-
-function toggleAddUserForm() {
-  showAddUser.value = !showAddUser.value;
-  // Reset form when toggled
-  if (showAddUser.value) {
-    newUserForm.value = {
-      firstName: '',
-      lastName: '',
-      email: '',
-      role: 'user'
-    };
-  }
-}
-
-async function addNewUser() {
-  try {
-    loading.value = true;
-    const userData = {
-      first_name: newUserForm.value.firstName,
-      last_name: newUserForm.value.lastName,
-      email: newUserForm.value.email,
-      role: newUserForm.value.role
-    };
-    
-    // Call API to create user
-    const result = await supabaseUsers.create(userData);
-    
-    // Add to local state with generated ID from API response
-    if (result && result.id) {
-      const newUser = {
-        id: result.id,
-        firstName: newUserForm.value.firstName,
-        lastName: newUserForm.value.lastName,
-        email: newUserForm.value.email,
-        handle: `@${newUserForm.value.firstName.toLowerCase()}`,
-        role: newUserForm.value.role,
-        isAdmin: newUserForm.value.role === 'admin',
-        profilePicture: undefined
-      };
-      
-      users.value.unshift(newUser); // Add to the beginning of the array
-      toggleAddUserForm(); // Hide the form
-    }
-  } catch (err) {
-    console.error('Failed to create user:', err);
-    error.value = 'Failed to create new user. Please try again.';
-  } finally {
-    loading.value = false;
-  }
-}
 
 const authStore = useAuthStore();
 
@@ -149,6 +92,50 @@ async function loadUsers() {
   } finally {
     loading.value = false;
     console.log('User loading complete, loading=false');
+  }
+}
+
+// Server-side search function for autocomplete
+async function searchUsers(query: string) {
+  if (!query || query.length < 2) {
+    searchResults.value = [];
+    return [];
+  }
+  
+  isSearching.value = true;
+  
+  try {
+    const response = await fetch(`/api/users/search?query=${encodeURIComponent(query)}&limit=5`);
+    
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to search users');
+    }
+    
+    // Transform server response to match our local User type
+    const transformedResults = data.items.map(user => ({
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      email: user.email,
+      handle: `@${user.first_name?.toLowerCase() || 'user'}`,
+      role: user.role,
+      isAdmin: user.role === 'admin',
+      profilePicture: user.profile_picture_url
+    }));
+    
+    searchResults.value = transformedResults;
+    return transformedResults;
+  } catch (err) {
+    console.error('Error searching users:', err);
+    return [];
+  } finally {
+    isSearching.value = false;
   }
 }
 
@@ -272,82 +259,26 @@ function clearSelection() {
   <main>
     <h1 class="title">
       {{ page }} ({{ users.length }})
-      <button style="float: right;" class="button is-primary" @click="toggleAddUserForm">
-        <span class="icon">
-          <i class="fas" :class="showAddUser ? 'fa-minus' : 'fa-user-plus'"></i>
-        </span>
-      </button>
+      <!-- Removed Add User button -->
     </h1>
     
-    <!-- Add User Form in Message Box -->
-    <div class="message is-link" v-show="showAddUser">
-      <div class="message-body">
-        <form @submit.prevent="addNewUser">
-          <div class="field">
-            <label class="label">First Name</label>
-            <div class="control">
-              <input class="input" type="text" v-model="newUserForm.firstName" placeholder="Enter first name">
-            </div>
-          </div>
-          
-          <div class="field">
-            <label class="label">Last Name</label>
-            <div class="control">
-              <input class="input" type="text" v-model="newUserForm.lastName" placeholder="Enter last name">
-            </div>
-          </div>
-          
-          <div class="field">
-            <label class="label">Email</label>
-            <div class="control has-icons-left">
-              <input class="input" type="email" v-model="newUserForm.email" placeholder="Enter email">
-              <span class="icon is-small is-left">
-                <i class="fas fa-envelope"></i>
-              </span>
-            </div>
-          </div>
-          
-          <div class="field">
-            <label class="label">Role</label>
-            <div class="control">
-              <div class="select is-fullwidth">
-                <select v-model="newUserForm.role">
-                  <option v-for="option in roleOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
-          <div class="field is-grouped">
-            <div class="control">
-              <button type="submit" class="button is-primary" :disabled="loading">
-                <span class="icon">
-                  <i class="fas fa-save"></i>
-                </span>
-                <span>Add User</span>
-              </button>
-            </div>
-            <div class="control">
-              <button type="button" class="button is-light" @click="toggleAddUserForm">Cancel</button>
-            </div>
-          </div>
-        </form>
-      </div>
-    </div>
+    <!-- Removed Add User Form -->
     
     <!-- Search bar with Oruga Autocomplete -->
     <div class="field mb-5">
       <div class="control">
         <o-autocomplete
           v-model="searchQuery"
-          :data="users"
+          :data="searchResults"
+          @typing="searchUsers"
           placeholder="Search users by name, email, or handle"
-          field="name"
+          :loading="isSearching"
+          field="firstName"
           :clear-on-select="false"
           :open-on-focus="true"
           icon="search"
+          :min-length="2"
+          :keep-first="false"
           :custom-formatter="getDisplayName"
           @select="onUserSelect"
         >
@@ -364,6 +295,11 @@ function clearSelection() {
                 <br>
                 <small>{{ option.email }}</small>
               </div>
+            </div>
+          </template>
+          <template #empty v-if="searchQuery && searchQuery.length >= 2">
+            <div class="has-text-grey px-2 py-2">
+              No matching users found
             </div>
           </template>
         </o-autocomplete>

@@ -32,19 +32,13 @@ app.use('/api/v1/data', dataRoutes);
 const diagnosticsRouter = require('./controllers/diagnostics');
 
 // Import controllers
-const mockDataController = require('./controllers/mockData');
-const usersController = require('./controllers/users'); // Use real users controller instead of hardcoded
-const activitiesController = require('./controllers/activities'); // Use real activities controller
-const friendsController = require('./controllers/friends'); // Use real friends controller
+const usersController = require('./controllers/users'); 
+const activitiesController = require('./controllers/activities'); 
+const friendsController = require('./controllers/friends');
 const authController = require('./controllers/auth');
 const systemController = require('./controllers/system');
 const dbTestController = require('./controllers/dbTestController');
-const healthController = require('./controllers/health'); // Import health controller
-
-// For backward compatibility, keep hardcoded controllers available
-const hardcodedUsersController = require('./controllers/hardcodedUsers');
-const hardcodedActivitiesController = require('./controllers/hardcodedActivities');
-const hardcodedFriendsController = require('./controllers/hardcodedFriends');
+const healthController = require('./controllers/health');
 
 // Add a Supabase health check endpoint with enhanced debugging
 app.get('/api/health/supabase', async (req, res) => {
@@ -91,18 +85,13 @@ app.get('/api/health/supabase', async (req, res) => {
   }
 });
 
-// Use the diagnostics routes
 app.use('/api/diagnostics', diagnosticsRouter);
 app.use('/api/system', systemController);
 app.use('/api/db-test', dbTestController);
 
-// Register routes - both real data routes and mock/demo routes
-app.use('/api/v1/mock', mockDataController);
-app.use('/api/v1/demo', hardcodedUsersController);
-app.use('/api/v1/demo/activities', hardcodedActivitiesController);
-app.use('/api/v1/demo/friends', hardcodedFriendsController);
+// Register routes - ONLY use real data routes
 app.use('/api/v1/auth', authController);
-app.use('/api/v1/health', healthController); // Register health controller route
+app.use('/api/v1/health', healthController);
 
 // Add real data Supabase controllers
 app.use('/api/v1/users', usersController);

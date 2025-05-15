@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { supabaseUsers } from '../services/supabase';
+import { Autocomplete } from '@oruga-ui/oruga-next';
 
 type User = {
   id: string;
@@ -18,6 +19,21 @@ const page = ref('Manage Users');
 const users = ref<User[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const searchQuery = ref('');
+const selectedUser = ref<User | null>(null);
+
+// Computed property to filter users based on search query
+const filteredUsers = computed(() => {
+  if (!searchQuery.value) return users.value;
+  
+  const query = searchQuery.value.toLowerCase();
+  return users.value.filter(user => {
+    return user.firstName.toLowerCase().includes(query) || 
+           user.lastName.toLowerCase().includes(query) || 
+           user.email.toLowerCase().includes(query) || 
+           (user.handle && user.handle.toLowerCase().includes(query));
+  });
+});
 
 // Form for editing user
 const isEditing = ref(false);
@@ -31,6 +47,69 @@ const userForm = ref({
 
 // For modal
 const isModalActive = ref(false);
+
+// New user functionality
+const showAddUser = ref(false);
+const newUserForm = ref({
+  firstName: '',
+  lastName: '',
+  email: '',
+  role: 'user'
+});
+const roleOptions = ref([
+  { label: 'Regular User', value: 'user' },
+  { label: 'Administrator', value: 'admin' }
+]);
+
+function toggleAddUserForm() {
+  showAddUser.value = !showAddUser.value;
+  // Reset form when toggled
+  if (showAddUser.value) {
+    newUserForm.value = {
+      firstName: '',
+      lastName: '',
+      email: '',
+      role: 'user'
+    };
+  }
+}
+
+async function addNewUser() {
+  try {
+    loading.value = true;
+    const userData = {
+      first_name: newUserForm.value.firstName,
+      last_name: newUserForm.value.lastName,
+      email: newUserForm.value.email,
+      role: newUserForm.value.role
+    };
+    
+    // Call API to create user
+    const result = await supabaseUsers.create(userData);
+    
+    // Add to local state with generated ID from API response
+    if (result && result.id) {
+      const newUser = {
+        id: result.id,
+        firstName: newUserForm.value.firstName,
+        lastName: newUserForm.value.lastName,
+        email: newUserForm.value.email,
+        handle: `@${newUserForm.value.firstName.toLowerCase()}`,
+        role: newUserForm.value.role,
+        isAdmin: newUserForm.value.role === 'admin',
+        profilePicture: undefined
+      };
+      
+      users.value.unshift(newUser); // Add to the beginning of the array
+      toggleAddUserForm(); // Hide the form
+    }
+  } catch (err) {
+    console.error('Failed to create user:', err);
+    error.value = 'Failed to create new user. Please try again.';
+  } finally {
+    loading.value = false;
+  }
+}
 
 const authStore = useAuthStore();
 
@@ -168,11 +247,131 @@ function forceLoadUsers() {
   console.log('Force loading users');
   loadUsers();
 }
+
+// Get display name for autofill
+function getDisplayName(user: User): string {
+  return `${user.firstName} ${user.lastName} (${user.email})`;
+}
+
+// Handle user selection from autofill
+function onUserSelect(user: User | null) {
+  selectedUser.value = user;
+  if (user) {
+    searchQuery.value = getDisplayName(user);
+  }
+}
+
+// Clear selection
+function clearSelection() {
+  selectedUser.value = null;
+  searchQuery.value = '';
+}
 </script>
 
 <template>
   <main>
-    <h1 class="title">{{ page }}</h1>
+    <h1 class="title">
+      {{ page }} ({{ users.length }})
+      <button style="float: right;" class="button is-primary" @click="toggleAddUserForm">
+        <span class="icon">
+          <i class="fas" :class="showAddUser ? 'fa-minus' : 'fa-user-plus'"></i>
+        </span>
+      </button>
+    </h1>
+    
+    <!-- Add User Form in Message Box -->
+    <div class="message is-link" v-show="showAddUser">
+      <div class="message-body">
+        <form @submit.prevent="addNewUser">
+          <div class="field">
+            <label class="label">First Name</label>
+            <div class="control">
+              <input class="input" type="text" v-model="newUserForm.firstName" placeholder="Enter first name">
+            </div>
+          </div>
+          
+          <div class="field">
+            <label class="label">Last Name</label>
+            <div class="control">
+              <input class="input" type="text" v-model="newUserForm.lastName" placeholder="Enter last name">
+            </div>
+          </div>
+          
+          <div class="field">
+            <label class="label">Email</label>
+            <div class="control has-icons-left">
+              <input class="input" type="email" v-model="newUserForm.email" placeholder="Enter email">
+              <span class="icon is-small is-left">
+                <i class="fas fa-envelope"></i>
+              </span>
+            </div>
+          </div>
+          
+          <div class="field">
+            <label class="label">Role</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select v-model="newUserForm.role">
+                  <option v-for="option in roleOptions" :key="option.value" :value="option.value">
+                    {{ option.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div class="field is-grouped">
+            <div class="control">
+              <button type="submit" class="button is-primary" :disabled="loading">
+                <span class="icon">
+                  <i class="fas fa-save"></i>
+                </span>
+                <span>Add User</span>
+              </button>
+            </div>
+            <div class="control">
+              <button type="button" class="button is-light" @click="toggleAddUserForm">Cancel</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Search bar with Oruga Autocomplete -->
+    <div class="field mb-5">
+      <div class="control">
+        <o-autocomplete
+          v-model="searchQuery"
+          :data="users"
+          placeholder="Search users by name, email, or handle"
+          field="name"
+          :clear-on-select="false"
+          :open-on-focus="true"
+          icon="search"
+          :custom-formatter="getDisplayName"
+          @select="onUserSelect"
+        >
+          <template #item="{ option }">
+            <div class="media">
+              <div class="media-left">
+                <div class="user-avatar-small">
+                  <img v-if="option.profilePicture" :src="option.profilePicture" :alt="option.firstName">
+                  <i v-else class="fas fa-user"></i>
+                </div>
+              </div>
+              <div class="media-content">
+                {{ option.firstName }} {{ option.lastName }}
+                <br>
+                <small>{{ option.email }}</small>
+              </div>
+            </div>
+          </template>
+        </o-autocomplete>
+        <button v-if="searchQuery" class="button is-small" @click="clearSelection">
+          Clear search
+        </button>
+      </div>
+    </div>
     
     <!-- Show when loading users -->
     <div v-if="loading" class="has-text-centered my-5">
@@ -187,14 +386,12 @@ function forceLoadUsers() {
       <button class="button is-info mt-3" @click="forceLoadUsers">Try Again</button>
     </div>
     
-    <div v-else-if="users.length === 0" class="notification is-warning has-text-centered">
+    <div v-else-if="filteredUsers.length === 0" class="notification is-warning has-text-centered">
       <p>No users found in the system.</p>
       <button class="button is-info mt-3" @click="forceLoadUsers">Refresh</button>
     </div>
     
     <div v-else class="table-container">
-
-      
       <table class="table is-fullwidth is-striped is-hoverable">
         <thead>
           <tr>
@@ -208,7 +405,7 @@ function forceLoadUsers() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(user, index) in users" :key="index">
+          <tr v-for="(user, index) in filteredUsers" :key="index">
             <td>
               <div class="user-avatar-small">
                 <img v-if="user.profilePicture" :src="user.profilePicture" :alt="user.firstName">
@@ -416,6 +613,55 @@ function forceLoadUsers() {
   
   .button {
     margin-bottom: 0.5rem;
+  }
+}
+
+.media {
+  display: flex;
+  align-items: center;
+}
+
+.media-left {
+  margin-right: 1rem;
+}
+
+.media-content {
+  flex: 1;
+}
+
+:deep(.o-acp__menu) {
+  width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+:deep(.o-acp__dropdown-item) {
+  padding: 0.5rem;
+}
+
+:deep(.o-acp__dropdown-item.is-hovered) {
+  background-color: #f5f5f5;
+}
+
+
+.message {
+  margin-bottom: 1.5rem;
+  animation: slideDown 0.3s ease;
+}
+
+.message-body {
+  padding: 1.25rem;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>
